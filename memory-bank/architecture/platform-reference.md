@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-06
+version: "1.1"
+updated: 2026-07-07
 verified_commit: ""
 owner: ""
 ---
@@ -72,9 +72,11 @@ owner: ""
   в настройках конструктора и активирует интеграцию. Это и есть модель meta-bot-core.
 
 ### Хост, авторизация, миграция (критично)
-- **Миграция домена до 19 июля 2026**: перенаправить запросы с `platform-api.max.ru`
-  на `platform-api2.max.ru` и добавить сертификат Минцифры в доверенные. См.
-  задачу в [../current/active-context.md](../current/active-context.md).
+- **Хост API: `platform-api2.max.ru`.** meta-bot-core — greenfield и использует v2
+  с самого начала; старый `platform-api.max.ru` не поддерживаем, «миграции» нет
+  (решение 2026-07-07, [../current/active-context.md](../current/active-context.md)).
+  На хостах, откуда идут запросы, в доверенные добавляется сертификат Минцифры.
+  Для справки: платформа отключает старый хост 19 июля 2026 — на нас это не влияет.
 - Токен передаётся в заголовке **`Authorization: <token>`**; передача через
   query-параметр **больше не поддерживается**.
 
@@ -104,6 +106,32 @@ owner: ""
   `DeviceStorage`/`SecureStorage`, `BiometricManager`, `HapticFeedback`, NFC (Android).
 - Валидация init data на backend: `HMAC_SHA256` по отсортированным параметрам с
   ключом-токеном бота, сверка с `hash` (BR-007).
+
+## Сводная матрица возможностей (данные для `CapabilityMatrix`)
+
+Основа для `CapabilityMatrix` (ADR [0005](../decisions/0005-capability-matrix.md)):
+единый блок конструктора доступен, только если возможность есть на платформе бота
+(BR-006). Таблица — проверенный срез на 2026-07-06; при изменении API правится здесь.
+
+| Возможность | Telegram | MAX | Блок / примечание |
+|---|---|---|---|
+| Текстовое сообщение | да | да | `Send Message` (общий) |
+| Inline/callback-кнопки | да | да | `Show Buttons` (общий), разные мапперы |
+| Запуск mini app | да (7 способов) | да (только внутри MAX, привязан к боту) | `Open Mini App` (общий), разный launch/bridge |
+| Mini app без бота | привязан к боту | нет (только в чат-боте) | BR-003 |
+| Валидация init data | `HMAC_SHA256(bot_token,"WebAppData")` | `HMAC_SHA256` по параметрам с токеном | BR-007, алгоритмы разные |
+| Порты webhook | 443/80/88/8443 | только 443 | конфиг `WEBHOOK_BASE_URL` |
+| Self-signed сертификат | допускается | не поддерживается (нужен доверенный УЦ) | |
+| Авторизация API | токен в пути URL | заголовок `Authorization` | различие адаптера |
+| Long polling | есть, взаимоисключимо с webhook | есть, но не для prod | ADR-0004 |
+| Секрет вебхука | `X-Telegram-Bot-Api-Secret-Token` | `X-Max-Bot-Api-Secret` | |
+| Ретраи доставки вебхука | механизм Telegram | до 10, экспон.; 8 ч без `200 OK` → авто-отписка | алерт в observability |
+| QR-сканер в mini app | — | `openCodeReader()` | platform-specific |
+| Биометрия / NFC / haptics в mini app | ограниченно | `BiometricManager` / NFC / `HapticFeedback` | bridge MAX богаче |
+| Платежи | Telegram Payments | иные механики | ADR-0005: осторожно, platform-specific блоки |
+
+Пустая ячейка / «—» = возможности нет или она принципиально иная → в конструкторе
+блок для этой платформы не предлагается, при публикации отклоняется (BR-006).
 
 ## Следствия для архитектуры
 

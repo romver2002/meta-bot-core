@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-06
+version: "1.1"
+updated: 2026-07-07
 verified_commit: ""
 owner: ""
 ---
@@ -56,12 +56,15 @@ owner: ""
 - Отдельной системы фиче-флагов пока нет — уточнить у команды по мере роста MVP
   ([../product/roadmap.md](../product/roadmap.md)).
 - **Платформенные базовые URL — конфигурируемы (см. реестр). ВАЖНО (MAX):**
-  до **2026-07-19** все запросы к MAX перевести с `platform-api.max.ru` на
-  `platform-api2.max.ru` (значение `MAX_API_BASE_URL`) **и добавить сертификат
-  Минцифры в доверенные** на хостах, откуда идут запросы; после дедлайна старый
-  хост недоступен. Смена хоста — ответственность `MaxBotAdapter`
-  (`infrastructure/platforms/max/`), а не бизнес-логики; приём обновлений — через
-  webhook (ADR [0004-webhook-platform-integration](../decisions/0004-webhook-platform-integration.md)).
+  проект greenfield — работаем **сразу на `platform-api2.max.ru`** (значение по
+  умолчанию `MAX_API_BASE_URL`); старый `platform-api.max.ru` **не используем**,
+  «миграции» у нас нет (решение 2026-07-07,
+  [current/active-context.md](../current/active-context.md)). На хостах, откуда
+  идут запросы, в доверенные добавляется **сертификат Минцифры**. Внешний дедлайн
+  платформы 2026-07-19 (когда старый хост отключат) нас не затрагивает — мы уже на v2.
+  Базовый URL — ответственность `MaxBotAdapter` (`infrastructure/platforms/max/`),
+  а не бизнес-логики; приём обновлений — через webhook (ADR
+  [0004-webhook-platform-integration](../decisions/0004-webhook-platform-integration.md)).
 - **Webhook-хост (`WEBHOOK_BASE_URL`) по платформам:** Telegram допускает порты
   443/80/88/8443; MAX — **только 443**, с сертификатом доверенного УЦ (self-signed
   не поддерживается). Полный проверенный справочник различий (порты, авторизация,

@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-06
+version: "1.1"
+updated: 2026-07-07
 verified_commit: ""
 owner: ""
 ---
@@ -36,6 +36,11 @@ owner: ""
 - 2026-07-06 — ADR-0003..0006 (движок на блоках + песочница, webhook, capability matrix,
   mini app как web-продукт) — черновики `proposed`, ждут ратификации командой
   ([../decisions/README.md](../decisions/README.md)).
+- 2026-07-07 — решено: интеграцию MAX делаем **сразу на `platform-api2.max.ru`**
+  (проект greenfield); старый `platform-api.max.ru` не используем, «миграции» нет.
+  Токен MAX — в заголовке `Authorization`; в доверенные добавляется сертификат Минцифры
+  ([../architecture/platform-reference.md](../architecture/platform-reference.md),
+  [../ops/configuration.md](../ops/configuration.md)).
 
 ## Следующие шаги
 
@@ -45,8 +50,9 @@ owner: ""
   проставляет человек ([../_meta/governance.md](../_meta/governance.md)).
 - 2026-07-06 — начать MVP end-to-end: Admin UI → Webhook Gateway → Flow Engine →
   Message Dispatcher → Mini App ([../product/roadmap.md](../product/roadmap.md)).
-- 2026-07-06 — соблюсти ops-срок: миграция `MaxBotAdapter` на `platform-api2.max.ru`
-  до 2026-07-19 (токен — в заголовке `Authorization`, не в query).
+- 2026-07-07 — `MaxBotAdapter` пишем сразу под `platform-api2.max.ru` (токен в
+  `Authorization`, не в query); старый хост не поддерживаем. Внешний дедлайн
+  платформы 2026-07-19 нас не блокирует — стартуем уже на v2.
 
 ## Открытые вопросы к команде
 

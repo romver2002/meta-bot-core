@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-06
+version: "1.1"
+updated: 2026-07-07
 verified_commit: ""
 owner: ""
 decision_status: proposed
@@ -44,10 +44,11 @@ long polling (мы опрашиваем платформу). Ограничен�
   различается только парсинг. Идемпотентность приёма — через Redis.
 - Long polling допустим **только** для локальной отладки, не для prod
   ([../ops/local-dev.md](../ops/local-dev.md)).
-- Платформенные технические требования (порты Telegram; `platform-api2.max.ru` и
-  `Authorization`-заголовок MAX; дедлайн 2026-07-19) — в
-  [../ops/configuration.md](../ops/configuration.md) и в capability/клиенте адаптера,
-  не в ядре.
+- Платформенные технические требования (порты Telegram; хост MAX и
+  `Authorization`-заголовок) — в [../ops/configuration.md](../ops/configuration.md)
+  и в клиенте адаптера, не в ядре. **MAX: проект greenfield — сразу на
+  `platform-api2.max.ru`**, старый `platform-api.max.ru` не используем (решение
+  2026-07-07); внешний дедлайн платформы 2026-07-19 нас не блокирует.
 
 ## Последствия
 
@@ -60,9 +61,11 @@ long polling (мы опрашиваем платформу). Ограничен�
 - Обязательная валидация источника вебхука и идемпотентность.
 
 **Риски:**
-- Пропущенная миграция MAX на `platform-api2.max.ru` до 2026-07-19 сломает интеграцию.
-  Митигация: срок и хост зафиксированы в [../ops/configuration.md](../ops/configuration.md),
-  задача — в [../current/active-context.md](../current/active-context.md).
+- Работа со старым хостом `platform-api.max.ru` бессмысленна: мы стартуем сразу на
+  `platform-api2.max.ru`. Риск — забыть про сертификат Минцифры в доверенных на
+  хостах запросов; хост и требование зафиксированы в
+  [../ops/configuration.md](../ops/configuration.md) и
+  [../architecture/platform-reference.md](../architecture/platform-reference.md).
 
 ## Ссылки
 

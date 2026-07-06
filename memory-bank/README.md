@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-05
+version: "1.1"
+updated: 2026-07-07
 verified_commit: ""
 owner: "teamlead"
 ---
@@ -38,6 +38,7 @@ owner: "teamlead"
 ### domain/ — предметная область (стабильный)
 - [glossary.md](domain/glossary.md) — глоссарий: термины и их значение в коде
 - [domain-model.md](domain/domain-model.md) — сущности, агрегаты, инварианты
+- [flow-blocks.md](domain/flow-blocks.md) — каталог блоков сценария (типы узлов и триггеров)
 - [business-rules.md](domain/business-rules.md) — бизнес-правила и их источники
 - [bounded-contexts.md](domain/bounded-contexts.md) — контексты и их интеграция
 
