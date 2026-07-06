@@ -1,0 +1,7 @@
+#!/bin/sh
+# Авто-bump version/updated для изменённых документов memory-bank.
+# Включение (один раз после клона): git config core.hooksPath scripts/git-hooks
+# На unix при необходимости: chmod +x scripts/git-hooks/pre-commit
+py=python
+command -v "$py" >/dev/null 2>&1 || py=python3
+exec "$py" "$(git rev-parse --show-toplevel)/scripts/bump_frontmatter.py"

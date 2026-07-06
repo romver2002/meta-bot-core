@@ -1,0 +1,45 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(git push:*)",
+      "Bash(gh pr create:*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo Session start: read memory-bank/current/active-context.md first. At the end of a significant session update memory-bank/current/ via: python scripts/mb_log.py done \"...\". Sensitive operations are governed by memory-bank/_meta/policy.md."
+          },
+          {
+            "type": "command",
+            "command": "python scripts/kb_log_read.py --event session-start"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python scripts/kb_log_read.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python scripts/check_session_close.py"
+          }
+        ]
+      }
+    ]
+  }
+}

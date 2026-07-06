@@ -1,0 +1,69 @@
+name: Validate memory bank
+
+on:
+  pull_request:
+    paths:
+      - "memory-bank/**"
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - ".claude/rules/**"
+      - "scripts/validate_memory_bank.py"
+  push:
+    branches: [main, master]
+    paths:
+      - "memory-bank/**"
+      - "AGENTS.md"
+  schedule:
+    # база гниёт именно тогда, когда её НЕ трогают — раз в неделю проверяем свежесть
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Self-test validator
+        run: python -m unittest discover -s scripts -p "test_*.py"
+
+      - name: Validate memory bank
+        run: python scripts/validate_memory_bank.py
+
+      - name: Check version/updated bumped (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin "${{ github.base_ref }}" --depth=50 || true
+          python scripts/bump_frontmatter.py --base "origin/${{ github.base_ref }}" --check
+
+      - name: Weekly staleness report as issue (scheduled only)
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python scripts/validate_memory_bank.py --json > report.json || true
+          count=$(python -c "import json;print(json.load(open('report.json'))['summary']['warning'])")
+          echo "warnings: $count"
+          if [ "$count" -gt 0 ]; then
+            python -c "import json;fs=[f for f in json.load(open('report.json'))['findings'] if f['severity']=='warning'];open('issue_body.md','w',encoding='utf-8').write('Предупреждений: '+str(len(fs))+'. Регламент разбора: memory-bank/_meta/lifecycle.md.'+chr(10)+chr(10)+chr(10).join('- ['+f['rule']+'] '+((f['path']+': ') if f['path'] else '')+f['message'] for f in fs))"
+            existing=$(gh issue list --state open --search "Memory bank: отчёт о свежести in:title" \
+              --json number --jq '.[0].number' --repo "$GITHUB_REPOSITORY" 2>/dev/null || true)
+            if [ -n "$existing" ] && [ "$existing" != "null" ]; then
+              gh issue comment "$existing" --body-file issue_body.md --repo "$GITHUB_REPOSITORY" || true
+            else
+              gh issue create \
+                --title "Memory bank: отчёт о свежести" \
+                --body-file issue_body.md \
+                --repo "$GITHUB_REPOSITORY" || true
+            fi
+          fi

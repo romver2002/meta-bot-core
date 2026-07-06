@@ -1,0 +1,68 @@
+# Контракт границ Clean Architecture для meta-bot-core (строгий режим).
+# Запуск: lint-imports  (до и после правки src/, в pre-commit и в CI-джобе arch-lint).
+# Смысл слоёв и границ — memory-bank/architecture/overview.md.
+# Протокол исправления протечек — .claude/rules/clean-architecture.md.
+#
+# Активируется, когда появляется пакет src/ (см. .github/workflows/arch-lint.yml).
+# Корневые пакеты совпадают с именами слоёв; src/ должен быть в PYTHONPATH.
+
+[importlinter]
+root_packages =
+    domain
+    application
+    infrastructure
+    presentation
+include_external_packages = True
+
+# Поток зависимостей направлен только внутрь: presentation → application → domain.
+[importlinter:contract:layers]
+name = Слои: presentation → application → domain
+type = layers
+layers =
+    presentation
+    application
+    domain
+
+# Домен ничего не знает о внешних слоях и фреймворках.
+[importlinter:contract:domain-pure]
+name = Домен свободен от инфраструктуры и фреймворков
+type = forbidden
+source_modules =
+    domain
+forbidden_modules =
+    application
+    infrastructure
+    presentation
+    fastapi
+    sqlalchemy
+    aiogram
+    httpx
+    redis
+    celery
+
+# Application ходит наружу только через свои порты — не в инфраструктуру/презентацию.
+[importlinter:contract:application-pure]
+name = Application зависит только от domain
+type = forbidden
+source_modules =
+    application
+forbidden_modules =
+    infrastructure
+    presentation
+
+# Presentation получает зависимости из composition root, а не тянет инфраструктуру.
+[importlinter:contract:presentation-no-infra]
+name = Presentation не импортирует infrastructure напрямую
+type = forbidden
+source_modules =
+    presentation
+forbidden_modules =
+    infrastructure
+
+# Платформенные адаптеры изолированы: Telegram не знает о MAX и наоборот.
+[importlinter:contract:platform-independence]
+name = Платформенные адаптеры изолированы друг от друга
+type = independence
+modules =
+    infrastructure.platforms.telegram
+    infrastructure.platforms.max
