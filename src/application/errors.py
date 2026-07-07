@@ -19,3 +19,7 @@ class BotCreationError(ApplicationError):
 
 class ConcurrencyError(ApplicationError):
     """Конфликт одновременного изменения (оптимистическая блокировка, ADR-0008)."""
+
+
+class FlowExecutionError(ApplicationError):
+    """Сбой исполнения сценария движком (неподдерживаемый блок, цикл)."""
