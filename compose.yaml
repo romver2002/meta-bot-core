@@ -56,7 +56,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-metabot}
       POSTGRES_DB: ${POSTGRES_DB:-metabot}
     ports:
-      - "5432:5432"
+      - "5433:5432"  # 5432 на хосте занят соседним проектом; внутри сети — 5432
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
