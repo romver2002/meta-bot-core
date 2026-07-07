@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.1"
+version: "1.2"
 updated: 2026-07-08
 verified_commit: ""
 owner: ""
@@ -17,9 +17,6 @@ owner: ""
 
 <!-- Что стабильно и на что можно опираться. Крупными блоками, не по коммитам. -->
 
-- 2026-07-06 — база знаний развёрнута из шаблона: структура memory-bank
-  (product/, domain/, architecture/, ops/, decisions/, workflows/, current/,
-  _meta/) на месте, индекс [../README.md](../README.md) актуален.
 - 2026-07-06 — строгий контур Clean Architecture заведён: контракт
   [../../.importlinter](../../.importlinter) (layers presentation→application→domain,
   forbidden для domain, independence платформ), CI-джоба
@@ -36,6 +33,9 @@ owner: ""
   (PG16+Redis7) — по образцу sro-agent-core.
 - 2026-07-08 — прототип визуального редактора `frontend/constructor/`
   (React + React Flow, ADR-0007): сборка и dev-сервер проверены.
+- 2026-07-08 — хранение по ADR-0008 реализовано: ORM-модели, Pg-репозитории
+  (версии Flow, оптимистический лок, единственная активная Session),
+  Alembic-миграция 0001; интеграционные тесты на testcontainers (PG16) зелёные.
 
 ## В работе
 
@@ -52,7 +52,7 @@ owner: ""
 
 | Проблема | Влияние | Обходной путь | Issue |
 |---|---|---|---|
-| `infrastructure/db` не реализован (ADR-0008 proposed), presentation — только `/health` | Сквозной путь Admin UI→webhook→движок пока не работает; Flow живёт в состоянии редактора | Юнит-контур (domain/application) полный и зелёный; интеграция — следующий этап | — |
+| Presentation — только `/health`: нет admin/webhook-роутов и Flow Engine | Сквозной путь Admin UI→webhook→движок пока не работает | Хранение (PG) готово и покрыто интеграционными тестами; следующий этап — роуты и движок | — |
 
 ## Расхождения база↔код
 
