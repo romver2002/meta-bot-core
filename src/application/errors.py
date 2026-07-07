@@ -1,0 +1,17 @@
+"""Ошибки application-слоя (классы ошибок use cases)."""
+
+
+class ApplicationError(Exception):
+    """Базовая ошибка application-слоя."""
+
+
+class BotNotFoundError(ApplicationError):
+    """Бот с указанным идентификатором не найден."""
+
+
+class FlowNotFoundError(ApplicationError):
+    """Сценарий не найден или не назначен боту."""
+
+
+class BotCreationError(ApplicationError):
+    """Нарушена политика создания бота (BR-002: только по выданному токену)."""
