@@ -1,0 +1,155 @@
+:root {
+  --canvas: #f5f7fa;
+  --panel: #ffffff;
+  --panel-2: #f8fafc;
+  --hairline: #e4e9f0;
+  --text-1: #0f172a;
+  --text-2: #64748b;
+  --accent: #4f46e5;
+  --tint: #229ed9;
+  --danger: #dc2626;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--text-1);
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { background: var(--canvas); }
+
+.app { display: flex; flex-direction: column; height: 100vh; }
+
+/* ── Верхняя панель ─────────────────────────────────────────── */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 56px; padding: 0 16px; gap: 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--hairline);
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--tint) 12%, transparent);
+}
+.topbar__left, .topbar__right { display: flex; align-items: center; gap: 10px; }
+.topbar__avatar { font-size: 22px; }
+.topbar__name {
+  font-size: 15px; font-weight: 600; border: 1px solid transparent;
+  background: transparent; padding: 4px 8px; border-radius: 8px; color: var(--text-1); width: 160px;
+}
+.topbar__name:hover { border-color: var(--hairline); }
+.topbar__name:focus { outline: none; border-color: var(--accent); background: var(--panel-2); }
+
+.badge--platform {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: color-mix(in srgb, var(--tint) 12%, var(--panel));
+  color: color-mix(in srgb, var(--tint) 75%, var(--text-1));
+  border: 1px solid color-mix(in srgb, var(--tint) 35%, transparent);
+}
+.badge__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tint); }
+.pill {
+  padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  color: #64748b; border: 1px solid var(--hairline);
+}
+
+.seg { display: inline-flex; background: var(--panel-2); border: 1px solid var(--hairline); border-radius: 9px; padding: 2px; }
+.seg__btn { border: 0; background: transparent; font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 7px; cursor: pointer; color: var(--text-2); }
+.seg__btn--on { background: var(--panel); color: var(--text-1); box-shadow: 0 1px 3px rgba(15,23,42,.12); }
+
+/* ── Кнопки ─────────────────────────────────────────────────── */
+.btn { border: 1px solid var(--hairline); background: var(--panel); color: var(--text-1);
+  font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 9px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.btn:hover { background: var(--panel-2); }
+.btn--primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn--primary:hover { filter: brightness(1.05); background: var(--accent); }
+.btn--primary:disabled { opacity: .5; cursor: not-allowed; }
+.btn--secondary { background: var(--panel-2); }
+.btn--ghost { background: transparent; }
+.btn--ghost-on { background: var(--panel-2); border-color: var(--accent); color: var(--accent); }
+.btn--danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 30%, transparent); background: color-mix(in srgb, var(--danger) 6%, var(--panel)); width: 100%; justify-content: center; margin-top: 8px; }
+.btn--danger:hover { background: color-mix(in srgb, var(--danger) 12%, var(--panel)); }
+.warn { background: rgba(255,255,255,.25); padding: 1px 7px; border-radius: 999px; font-size: 11px; }
+.icon-btn { border: 0; background: transparent; cursor: pointer; color: var(--text-2); font-size: 13px; padding: 2px 6px; border-radius: 6px; }
+.icon-btn:hover { background: var(--panel-2); color: var(--text-1); }
+
+/* ── Рабочая область ────────────────────────────────────────── */
+.workspace { display: grid; grid-template-columns: 244px 1fr 340px; flex: 1; min-height: 0; }
+
+/* Палитра */
+.palette { background: var(--panel); border-right: 1px solid var(--hairline); padding: 12px; overflow-y: auto; }
+.palette__hint { font-size: 11px; color: var(--text-2); margin-bottom: 10px; }
+.palette__group { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); margin: 14px 0 6px; }
+.pal { display: flex; align-items: center; gap: 9px; padding: 9px 10px; margin-bottom: 6px;
+  border: 1px solid var(--hairline); border-left: 3px solid var(--accent); border-radius: 9px;
+  background: var(--panel); cursor: grab; font-size: 13px; font-weight: 500; user-select: none; }
+.pal:hover { background: var(--panel-2); box-shadow: 0 1px 4px rgba(15,23,42,.06); }
+.pal:active { cursor: grabbing; }
+.pal__icon { font-size: 15px; }
+.pal__label { flex: 1; }
+.pal__lock { font-size: 11px; }
+.pal--off { opacity: .4; cursor: not-allowed; filter: grayscale(.5); }
+.pal--off:hover { background: var(--panel); box-shadow: none; }
+
+/* Холст */
+.canvas { position: relative; min-width: 0; }
+.react-flow__attribution { font-size: 9px; opacity: .5; }
+
+.dock { position: absolute; left: 16px; bottom: 16px; right: 16px; z-index: 5;
+  display: flex; align-items: center; gap: 10px; justify-content: space-between;
+  padding: 10px 14px; border-radius: 10px; font-size: 13px; font-weight: 500;
+  box-shadow: 0 6px 20px rgba(15,23,42,.14); }
+.dock--ok { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+.dock--bad { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+
+/* Панель настройки */
+.config { background: var(--panel); border-left: 1px solid var(--hairline); padding: 16px; overflow-y: auto; }
+.config--empty { display: flex; align-items: center; justify-content: center; }
+.config__empty { text-align: center; color: var(--text-2); font-size: 13px; line-height: 1.6; }
+.config__empty-ic { font-size: 30px; margin-bottom: 8px; opacity: .5; }
+.config__title { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700;
+  padding-bottom: 10px; margin-bottom: 12px; border-bottom: 2px solid var(--accent); }
+.config__hint { font-size: 12px; color: var(--text-2); margin: 0 0 12px; line-height: 1.5; }
+.config__badge { font-size: 11.5px; line-height: 1.5; background: #fff1f2; color: #9f1239;
+  border: 1px solid #fecdd3; border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; }
+.config__badge code { background: rgba(0,0,0,.06); padding: 1px 4px; border-radius: 4px; }
+
+.field { display: block; margin-bottom: 12px; }
+.field__label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 5px; }
+.field input, .field select, .field textarea, .btnsField input, .btnsField select {
+  width: 100%; font-size: 13px; padding: 8px 10px; border: 1px solid var(--hairline);
+  border-radius: 8px; background: var(--panel-2); color: var(--text-1); font-family: inherit; }
+.field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--accent); background: var(--panel); }
+.field textarea { resize: vertical; }
+.field__code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 12px; background: #0e1420; color: #e6eaf2; border-color: #28324c; }
+
+.btnsField__row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; margin-bottom: 6px; }
+.btnsField .btn--ghost { width: 100%; justify-content: center; border: 1px dashed var(--hairline); }
+
+/* ── Узлы холста ────────────────────────────────────────────── */
+.node { width: 210px; background: var(--panel); border: 1px solid var(--hairline);
+  border-left: 4px solid var(--accent); border-radius: 11px; padding: 10px 12px;
+  box-shadow: 0 1px 3px rgba(15,23,42,.08); font-size: 12px; }
+.node--selected { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+.node--trigger { border-left-color: #059669; background: #f0fdf4; }
+.node__head { display: flex; align-items: center; gap: 7px; font-weight: 700; color: var(--text-1); }
+.node__icon { font-size: 14px; }
+.node__title { flex: 1; }
+.node__badge { font-size: 11px; }
+.node__summary { margin-top: 6px; color: var(--text-2); font-size: 11.5px; line-height: 1.45;
+  overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.node__branches { display: flex; justify-content: space-between; margin-top: 8px; font-size: 10px; font-weight: 700; }
+.br--yes { color: #16a34a; }
+.br--no { color: #64748b; }
+
+.handle { width: 9px; height: 9px; background: #94a3b8; border: 2px solid var(--panel); }
+.handle--yes { background: #16a34a; }
+.handle--no { background: #64748b; }
+.handle--trigger { background: #059669; }
+
+.react-flow__edge-text { font-size: 10px; font-weight: 700; }
+
+/* ── JSON-панель ────────────────────────────────────────────── */
+.jsonDrawer { position: fixed; right: 0; top: 56px; bottom: 0; width: 420px; z-index: 20;
+  background: #0e1420; color: #e6eaf2; border-left: 1px solid #28324c; display: flex; flex-direction: column;
+  box-shadow: -8px 0 24px rgba(0,0,0,.25); }
+.jsonDrawer__head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 10px 14px; font-size: 11px; color: #93a0b5; border-bottom: 1px solid #28324c; }
+.jsonDrawer__head .icon-btn { color: #93a0b5; }
+.jsonDrawer__body { margin: 0; padding: 14px; overflow: auto; font-size: 11.5px; line-height: 1.5;
+  font-family: "SFMono-Regular", Consolas, monospace; }
