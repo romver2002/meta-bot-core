@@ -15,7 +15,9 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    database_url: str = "postgresql+asyncpg://metabot:metabot@localhost:5432/metabot"
+    project_name: str = "meta-bot-core"
+    public_url: str = "http://localhost:8000"
+    database_url: str = "postgresql+asyncpg://metabot:metabot@localhost:5433/metabot"
     redis_url: str = "redis://localhost:6379/0"
     session_idle_ttl: int = 3600
     webhook_idempotency_ttl: int = 86400

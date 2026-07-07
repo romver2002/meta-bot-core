@@ -18,6 +18,7 @@ dependencies = [
     "httpx>=0.28.1",
     "pydantic>=2.13.2",
     "pydantic-settings>=2.5.2",
+    "redis>=5.2",
     "sqlalchemy[asyncio]>=2.0.36",
 ]
 
