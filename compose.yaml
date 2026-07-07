@@ -1,0 +1,82 @@
+# Локальная разработка meta-bot-core: API + PostgreSQL 16 + Redis 7.
+# Паттерн — как в sro-agent-core: uv run uvicorn --reload, код примонтирован,
+# .venv контейнера защищён анонимным volume. Секреты — в .env (см. .env.example).
+
+name: meta-bot-core
+
+networks:
+  dev:
+
+volumes:
+  pgdata:
+
+services:
+  api:
+    build:
+      context: .
+      args:
+        APP_VERSION: ${APP_VERSION:-0.0.0}
+    restart: on-failure
+    container_name: meta-bot-core-api
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-metabot}:${POSTGRES_PASSWORD:-metabot}@postgres:5432/${POSTGRES_DB:-metabot}
+      REDIS_URL: redis://redis:6379/0
+    command: uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - dev
+    volumes:
+      - ./src:/app/src
+      - /app/.venv
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: meta-bot-core-postgres
+    restart: on-failure
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-metabot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-metabot}
+      POSTGRES_DB: ${POSTGRES_DB:-metabot}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-metabot} -d ${POSTGRES_DB:-metabot}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - dev
+
+  redis:
+    image: redis:7-alpine
+    container_name: meta-bot-core-redis
+    restart: on-failure
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - dev
