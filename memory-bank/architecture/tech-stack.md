@@ -1,16 +1,16 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-06
+version: "1.1"
+updated: 2026-07-08
 verified_commit: ""
 owner: ""
 ---
 
 # Технологический стек
 
-Канонический реестр технологий meta-bot-core (Python 3.12 async · FastAPI ·
+Канонический реестр технологий meta-bot-core (Python 3.14 async · FastAPI ·
 PostgreSQL 16 + SQLAlchemy 2 · Redis 7 · изолированный executor песочницы ·
-TypeScript mini app; ruff / mypy / import-linter; pytest; CI — GitHub Actions).
+TypeScript mini app; uv · ruff / mypy / import-linter; pytest; CI — GitHub Actions).
 К какому слою относится технология — [overview.md](overview.md). Крупные выборы
 фиксируются через ADR — [../decisions/README.md](../decisions/README.md).
 
@@ -22,7 +22,8 @@ TypeScript mini app; ruff / mypy / import-linter; pytest; CI — GitHub Actions)
 
 | Технология | Версия | Роль | Статус |
 |---|---|---|---|
-| Python | 3.12 | основной язык, единый async-рантайм backend | принята |
+| Python | 3.14 | основной язык, единый async-рантайм backend (решение Романа 2026-07-08, равнение на sro-agent-core) | принята |
+| uv | — | менеджер зависимостей и версий Python; lock-файл `uv.lock`, `.python-version` | принята |
 | FastAPI | — | presentation: admin API конструктора + webhook-роуты | принята |
 | PostgreSQL | 16 | основное хранилище: `Bot`/`Flow`/`Session` (persistent) | принята |
 | SQLAlchemy (async) | 2.x | infrastructure: доступ к БД, реализация `FlowRepository`/`SessionRepository` | принята |
@@ -53,9 +54,9 @@ mini app — секреты**: живут только в token vault, не в �
 
 ## Версии
 
-- Точные версии зависимостей фиксируются lock-файлом: `poetry.lock` или `uv.lock` —
-  выбор менеджера зависимостей (poetry / uv) уточнить у команды; после выбора этот
-  пункт и строку CI обновить.
+- Точные версии зависимостей фиксируются lock-файлом `uv.lock` (менеджер — uv;
+  решение Романа 2026-07-08). Floor-версии (`>=`) — в `pyproject.toml`,
+  точные пины держит lock.
 - Обновление мажорной версии — отдельный PR + обновление соответствующей строки реестра.
 - Уязвимости зависимостей отслеживаются в CI (разумный дефолт — `pip-audit`;
   конкретный инструмент, dependabot / renovate / pip-audit, уточнить у команды).

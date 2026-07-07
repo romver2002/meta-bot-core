@@ -1,0 +1,101 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "meta-bot-core"
+dynamic = ["version"]
+description = "Доменное ядро конструктора сценариев чат-ботов и mini app (Telegram, MAX)"
+requires-python = ">=3.14"
+keywords = ["bot-constructor", "fastapi", "uv"]
+# Runtime-зависимости входят вместе со слоями, которым они нужны
+# (в domain зависимостей нет — memory-bank/architecture/tech-stack.md);
+# SQLAlchemy/asyncpg/Redis придут с infrastructure по ADR-0008.
+dependencies = [
+    "fastapi[standard-no-fastapi-cloud-cli]>=0.135.3",
+    "httpx>=0.28.1",
+    "pydantic>=2.13.2",
+    "pydantic-settings>=2.5.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.14.0",
+    "mypy>=1.19.0",
+    "import-linter>=2.0",
+]
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+local_scheme = "no-local-version"
+
+[tool.hatch.build.targets.wheel]
+only-include = [
+    "src/domain",
+    "src/application",
+    "src/infrastructure",
+    "src/presentation",
+    "src/main.py",
+]
+
+[tool.hatch.build.targets.wheel.sources]
+src = ""
+
+[tool.uv]
+cache-dir = ".uv-cache"
+managed = true
+python-preference = "only-managed"
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+filterwarnings = ["ignore::DeprecationWarning"]
+markers = [
+    "unit: быстрые тесты без I/O (domain, application)",
+    "integration: тесты против реальных Postgres 16 / Redis 7 (testcontainers)",
+    "e2e: сквозные критические пути",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "ANN", "COM", "C90", "DJ", "EXE", "T10", "TID",
+    "D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107",
+    # D213 — антипод уже игнорируемого D212 (summary на первой строке докстринга).
+    "D200", "D205", "D212", "D213", "D400", "D401", "D415",
+    "E402", "E501", "TRY003", "TD002", "TD003", "FIX002", "RUF001", "RUF002", "RUF003",
+    # --- Конфликтует с runtime-моделью FastAPI/Pydantic ---
+    # Аннотации use case'ов/DTO/портов нужны в рантайме (Depends, response_model,
+    # isinstance) — перенос в TYPE_CHECKING сломал бы DI.
+    "TC001", "TC002", "TC003",
+    # FastAPI Security/Depends-параметры обязательны фреймворком,
+    # даже если не используются в теле эндпоинта.
+    "ARG001",
+    # Идиома доменных ошибок: текст передаётся прямо в конструктор (DomainError(msg)).
+    "EM101", "EM102",
+    # Конструкторы use case'ов инъектируют коллабораторов осознанно (явный DI).
+    "PLR0913",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Тест-специфика: assert (S101), магические значения (PLR2004), bool-параметры (FBT001),
+# фейковые «секреты» в фикстурах (S105/S106), неиспользуемые аргументы фейков (ARG002),
+# ленивые импорты внутри тестов (PLC0415).
+"tests/**/*.py" = ["S101", "PLR2004", "FBT001", "PLC0415", "S105", "S106", "ARG002"]
+
+[tool.mypy]
+strict = true
+python_version = "3.14"
+mypy_path = "src"
+packages = ["domain", "application"]

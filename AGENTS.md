@@ -10,7 +10,7 @@
   mini app для мессенджеров (Telegram, MAX). Это движок сценариев + платформенные
   адаптеры, **а не «универсальный бот»**: ядро не знает, что такое Telegram или MAX.
   Зачем и для кого — [memory-bank/product/vision.md](memory-bank/product/vision.md).
-- **Стек**: Python 3.12 (async), FastAPI (presentation), PostgreSQL 16 + SQLAlchemy 2
+- **Стек**: Python 3.14 (async, uv), FastAPI (presentation), PostgreSQL 16 + SQLAlchemy 2
   (хранилище сценариев/сессий), Redis 7 (FSM-состояние, идемпотентность вебхуков),
   изолированный executor для пользовательских Python-блоков, TypeScript mini app
   (отдельный web-продукт). Реестр — [memory-bank/architecture/tech-stack.md](memory-bank/architecture/tech-stack.md).

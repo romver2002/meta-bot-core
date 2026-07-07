@@ -3,12 +3,26 @@
 
 # служебная память ruflo/claude-flow (координационный кэш, не источник истины)
 .swarm/
+.claude-flow/
+.hive-mind/
 
 # Python
 __pycache__/
 *.py[cod]
 .venv/
 venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.uv-cache/
+*.egg-info/
+dist/
 
 # локальные секреты и окружение (значения — не в репозитории)
 .env
+
+# локальная векторная память ruflo (артефакт роя, не источник истины)
+ruvector.db
+
+# внешний референс-репозиторий (чужой код без лицензии, в наш git не входит)
+Templater/
