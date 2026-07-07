@@ -1,0 +1,21 @@
+"""Настройки инфраструктуры (pydantic-settings).
+
+Значения приходят из переменных окружения / .env (compose передаёт
+DATABASE_URL и REDIS_URL). Дефолты соответствуют локальному compose.
+Секреты (токены ботов) сюда не попадают — они живут в token vault.
+"""
+
+from __future__ import annotations
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Конфигурация подключения и TTL (ops/configuration.md, ADR-0008)."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    database_url: str = "postgresql+asyncpg://metabot:metabot@localhost:5432/metabot"
+    redis_url: str = "redis://localhost:6379/0"
+    session_idle_ttl: int = 3600
+    webhook_idempotency_ttl: int = 86400

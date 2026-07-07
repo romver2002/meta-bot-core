@@ -15,3 +15,7 @@ class FlowNotFoundError(ApplicationError):
 
 class BotCreationError(ApplicationError):
     """Нарушена политика создания бота (BR-002: только по выданному токену)."""
+
+
+class ConcurrencyError(ApplicationError):
+    """Конфликт одновременного изменения (оптимистическая блокировка, ADR-0008)."""

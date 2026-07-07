@@ -53,6 +53,7 @@ class Bot:
     flow_id: str | None = None
     status: BotStatus = BotStatus.DRAFT
     mini_app: MiniApp | None = None
+    published_flow_version_id: str | None = None
 
     def __setattr__(self, name: str, value: object) -> None:
         # Инвариант domain-model.md: Platform неизменяема после создания бота.
@@ -83,6 +84,12 @@ class Bot:
         if not flow.triggers:
             raise BotPublicationError("BR-001: у сценария нет ни одного триггера")
         self.status = BotStatus.PUBLISHED
+
+    def pin_published_version(self, flow_version_id: str) -> None:
+        """Закрепляет за ботом исполняемую версию сценария (ADR-0008)."""
+        if self.status is not BotStatus.PUBLISHED:
+            raise BotLifecycleError("Версию сценария можно закрепить только за опубликованным ботом")
+        self.published_flow_version_id = flow_version_id
 
     def pause(self) -> None:
         if self.status is not BotStatus.PUBLISHED:

@@ -12,10 +12,13 @@ keywords = ["bot-constructor", "fastapi", "uv"]
 # (в domain зависимостей нет — memory-bank/architecture/tech-stack.md);
 # SQLAlchemy/asyncpg/Redis придут с infrastructure по ADR-0008.
 dependencies = [
+    "alembic>=1.14",
+    "asyncpg>=0.30.0",
     "fastapi[standard-no-fastapi-cloud-cli]>=0.135.3",
     "httpx>=0.28.1",
     "pydantic>=2.13.2",
     "pydantic-settings>=2.5.2",
+    "sqlalchemy[asyncio]>=2.0.36",
 ]
 
 [dependency-groups]
@@ -26,6 +29,7 @@ dev = [
     "ruff>=0.14.0",
     "mypy>=1.19.0",
     "import-linter>=2.0",
+    "testcontainers[postgres]>=4.8",
 ]
 
 [tool.hatch.version]
@@ -93,9 +97,11 @@ ignore = [
 # фейковые «секреты» в фикстурах (S105/S106), неиспользуемые аргументы фейков (ARG002),
 # ленивые импорты внутри тестов (PLC0415).
 "tests/**/*.py" = ["S101", "PLR2004", "FBT001", "PLC0415", "S105", "S106", "ARG002"]
+# Скрипты Alembic живут вне пакета — конвенция инструмента (нет __init__.py).
+"migrations/**/*.py" = ["INP001"]
 
 [tool.mypy]
 strict = true
 python_version = "3.14"
 mypy_path = "src"
-packages = ["domain", "application"]
+packages = ["domain", "application", "infrastructure"]

@@ -27,7 +27,7 @@ async def _prepared_use_case(
     bot = make_bot()
     bot.token = type(bot.token)(vault_ref=await vault.store(bot.id, "fake-token"))
     await bots.save(bot)
-    await flows.save(make_flow())
+    await flows.save_draft(make_flow())
     factory = StubPlatformFactory(platform_port)
     return (
         PublishBotUseCase(bots=bots, flows=flows, token_vault=vault, platform_factory=factory),
@@ -45,6 +45,8 @@ async def test_publish_happy_path_br001_br006() -> None:
     assert bots.storage["bot-1"].status is BotStatus.PUBLISHED
     # Токен проверялся у платформы значением из vault.
     assert platform_port.verified_tokens == ["fake-token"]
+    # ADR-0008: за ботом закреплена замороженная версия сценария.
+    assert bot.published_flow_version_id == "flow-1:v1"
 
 
 async def test_publish_rejects_invalid_token_br001() -> None:

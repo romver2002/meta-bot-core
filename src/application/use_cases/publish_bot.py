@@ -44,7 +44,7 @@ class PublishBotUseCase:
             raise BotNotFoundError(f"Бот {bot_id!r} не найден")
         if bot.flow_id is None:
             raise FlowNotFoundError(f"Боту {bot_id!r} не назначен сценарий")
-        flow = await self._flows.get(bot.flow_id)
+        flow = await self._flows.get_draft(bot.flow_id)
         if flow is None:
             raise FlowNotFoundError(f"Сценарий {bot.flow_id!r} не найден")
 
@@ -54,6 +54,11 @@ class PublishBotUseCase:
 
         flow.validate_for_publication(platform.capabilities())  # BR-006
         bot.publish(flow=flow, token_is_valid=token_is_valid)  # BR-001
+
+        # ADR-0008: черновик замораживается в иммутабельную версию,
+        # бот закрепляет её как исполняемую.
+        version = await self._flows.publish(bot.flow_id)
+        bot.pin_published_version(version.id)
 
         await self._bots.save(bot)
         return bot

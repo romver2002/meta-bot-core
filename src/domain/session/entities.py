@@ -20,6 +20,7 @@ class Session:
     id: str
     bot_id: str
     external_user_id: str
+    flow_version_id: str | None = None
     current_node_id: str | None = None
     variables: dict[str, object] = dataclasses.field(default_factory=dict)
     awaiting_variable: str | None = None
