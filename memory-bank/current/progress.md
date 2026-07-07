@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-06
+version: "1.1"
+updated: 2026-07-08
 verified_commit: ""
 owner: ""
 ---
@@ -27,18 +27,23 @@ owner: ""
   протечек [clean-architecture.md](../../.claude/rules/clean-architecture.md).
 - 2026-07-06 — реестр ADR заполнен: [0001](../decisions/0001-clean-architecture.md)
   и [0002](../decisions/0002-domain-core-and-adapters.md) приняты (accepted),
-  0003–0006 заведены как proposed.
+  0003–0008 заведены как proposed.
+- 2026-07-08 — вертикальный срез бэкенда в `src/` по канону CA: domain
+  (Bot/Flow/Session, инварианты BR-001/003/006), application (6 портов,
+  CreateBot/PublishBot), presentation (`/health`), скелет infrastructure.
+  Контур качества зелёный: ruff (ALL) · mypy strict · `lint-imports` 5/5 ·
+  pytest 32 unit. Стек: Python 3.14 + uv (`uv.lock`), Dockerfile + compose
+  (PG16+Redis7) — по образцу sro-agent-core.
+- 2026-07-08 — прототип визуального редактора `frontend/constructor/`
+  (React + React Flow, ADR-0007): сборка и dev-сервер проверены.
 
 ## В работе
 
 <!-- Начато, но не завершено; в каком состоянии оставлено и что дальше. -->
 
-- 2026-07-06 — наполнение доменных разделов (glossary, domain-model,
-  business-rules BR-001..BR-007) реальным содержимым; следующий шаг —
-  [active-context.md](active-context.md).
-- 2026-07-06 — ратификация ADR [0003](../decisions/0003-flow-engine-blocks-and-sandbox.md)–[0006](../decisions/0006-mini-app-as-web-product.md)
-  (движок на блоках + песочница Python, webhook, capability matrix, mini app):
-  пока proposed, ждут решения команды.
+- 2026-07-08 — ратификация ADR [0003](../decisions/0003-flow-engine-blocks-and-sandbox.md)–[0008](../decisions/0008-persistence-model.md):
+  пока proposed, ждут решения команды. Следом — `infrastructure/db` по ADR-0008
+  (models/mappers/repositories, Alembic, testcontainers) и admin/webhook-роуты.
 
 ## Известные проблемы
 
@@ -47,7 +52,7 @@ owner: ""
 
 | Проблема | Влияние | Обходной путь | Issue |
 |---|---|---|---|
-| Кода в `src/` пока нет — `arch-lint` де-факто не проверяет границы | Регресс границ можно поймать только ревью, пока пакет `src/` не появится | `lint-imports` включается автоматически с первым модулем в `src/` | — |
+| `infrastructure/db` не реализован (ADR-0008 proposed), presentation — только `/health` | Сквозной путь Admin UI→webhook→движок пока не работает; Flow живёт в состоянии редактора | Юнит-контур (domain/application) полный и зелёный; интеграция — следующий этап | — |
 
 ## Расхождения база↔код
 
@@ -55,17 +60,17 @@ owner: ""
      (или между документами) — НЕ исправляя их молча, см. [../_meta/lifecycle.md](../_meta/lifecycle.md).
      Расхождение устранено (документ или код поправлен) → строку удалить. -->
 
-Нет: кода в `src/` ещё нет, сверять базу знаний не с чем. Появится пакет `src/` —
-проверять соответствие имён из [../domain/glossary.md](../domain/glossary.md) и
-границ из [../architecture/overview.md](../architecture/overview.md).
+- 2026-07-08 — канонический список портов ([../architecture/overview.md](../architecture/overview.md),
+  glossary) не содержит `BotRepository`, но `CreateBotUseCase`/`PublishBotUseCase`
+  требуют персистенцию агрегата `Bot` — порт добавлен в
+  `src/application/ports/bot_repository.py`; внести в glossary/patterns
+  при ратификации [ADR-0008](../decisions/0008-persistence-model.md).
 
 ## Технический долг
 
 <!-- Только крупные пункты, влияющие на планирование. Мелочь — в issue-трекер.
      У каждого пункта — ссылка на issue и почему это долг (какое правило нарушено). -->
 
-- 2026-07-06 — не выбран менеджер зависимостей и lock-файл (poetry/uv) —
-  уточнить у команды; открытый вопрос в [active-context.md](active-context.md).
 - 2026-07-06 — не выбрано хранилище секретов за портом `TokenVaultPort`
   (token vault) — уточнить у команды; блокирует безопасную реализацию
   BR-004/BR-007, см. [../architecture/overview.md](../architecture/overview.md).

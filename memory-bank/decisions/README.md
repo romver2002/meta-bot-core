@@ -1,7 +1,7 @@
 ---
 status: draft
-version: "1.0"
-updated: 2026-07-05
+version: "1.1"
+updated: 2026-07-08
 verified_commit: ""
 owner: ""
 ---
@@ -75,7 +75,9 @@ ADR только со статусом `proposed` и сообщает об эт�
 | [0004](0004-webhook-platform-integration.md) | Приём обновлений через webhook | proposed | 2026-07-06 |
 | [0005](0005-capability-matrix.md) | Матрица возможностей платформ + единые блоки | proposed | 2026-07-06 |
 | [0006](0006-mini-app-as-web-product.md) | Mini app как отдельный web-продукт с bridge | proposed | 2026-07-06 |
+| [0007](0007-visual-flow-editor.md) | Визуальный редактор сценариев — React + React Flow | proposed | 2026-07-08 |
+| [0008](0008-persistence-model.md) | Модель хранения: версии Flow в JSONB, Session в PG+Redis | proposed | 2026-07-08 |
 
-ADR-0001 и 0002 приняты (основа проекта); 0003–0006 — черновики на ратификацию
+ADR-0001 и 0002 приняты (основа проекта); 0003–0008 — черновики на ратификацию
 командой: статус `accepted` им проставляет владелец раздела
 ([../_meta/governance.md](../_meta/governance.md)).

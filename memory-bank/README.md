@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.1"
-updated: 2026-07-07
+version: "1.2"
+updated: 2026-07-08
 verified_commit: ""
 owner: "teamlead"
 ---
@@ -70,6 +70,8 @@ owner: "teamlead"
 - [0004-webhook-platform-integration.md](decisions/0004-webhook-platform-integration.md) — приём обновлений через webhook (proposed)
 - [0005-capability-matrix.md](decisions/0005-capability-matrix.md) — матрица возможностей платформ (proposed)
 - [0006-mini-app-as-web-product.md](decisions/0006-mini-app-as-web-product.md) — mini app как отдельный web-продукт (proposed)
+- [0007-visual-flow-editor.md](decisions/0007-visual-flow-editor.md) — визуальный редактор сценариев: React + React Flow (proposed)
+- [0008-persistence-model.md](decisions/0008-persistence-model.md) — модель хранения: версии Flow в JSONB, Session в PG+Redis (proposed)
 
 ### workflows/ — процессы под тип задачи (стабильный)
 - [new-feature.md](workflows/new-feature.md) — процесс новой фичи (включая связку со spec-kit)

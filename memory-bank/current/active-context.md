@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.1"
-updated: 2026-07-07
+version: "1.6"
+updated: 2026-07-08
 verified_commit: ""
 owner: ""
 ---
@@ -41,6 +41,8 @@ owner: ""
   Токен MAX — в заголовке `Authorization`; в доверенные добавляется сертификат Минцифры
   ([../architecture/platform-reference.md](../architecture/platform-reference.md),
   [../ops/configuration.md](../ops/configuration.md)).
+- 2026-07-08 — Каркас визуального редактора сценариев на React + React Flow (frontend/constructor): палитра 4 триггеров + 8 блоков, холст с переходами, панель настройки, гейт публикации BR-001, JSON-панель Flow. npm build ок (202 модуля), dev-сервер 200. ADR-0007 (proposed) + синхронизированы индексы.
+- 2026-07-08 — Вертикальный срез бэкенда: src/ по канону CA (domain: Bot/Flow/Session+BR-001/003/006; application: 6 портов + CreateBot/PublishBot; presentation: health; infrastructure: скелет). Стек поднят по образцу sro-agent-core (решение Романа): Python 3.14, uv+uv.lock, hatchling/hatch-vcs, pytest 9, ruff 0.14 ALL, Dockerfile+compose (PG16+Redis7). Всё зелёное: ruff, mypy strict, lint-imports 5/5, pytest 32. ADR-0008 (proposed) + specs/001-persistence/design.md
 
 ## Следующие шаги
 
@@ -53,6 +55,9 @@ owner: ""
 - 2026-07-07 — `MaxBotAdapter` пишем сразу под `platform-api2.max.ru` (токен в
   `Authorization`, не в query); старый хост не поддерживаем. Внешний дедлайн
   платформы 2026-07-19 нас не блокирует — стартуем уже на v2.
+- 2026-07-08 — ADR-0007 вынести на ратификацию; при accepted — внести фронтенд-стек в architecture/tech-stack.md и описать контракт Admin API (CreateBot/PublishBot, обмен Flow).
+- 2026-07-08 — Первый реальный кейс после MVP конструктора — интернет-магазин с корзиной внутри Telegram/MAX: mini app-витрина (core/cart+core/catalog по ADR-0006), воронка в боте из блоков, платежи как platform-specific возможность по CapabilityMatrix, товары/заказы — отдельный bounded context Shop (ядро про них не знает).
+- 2026-07-08 — Реализовать infrastructure/db по ADR-0008 (models/mappers/repositories, Alembic, интеграционные тесты testcontainers) и admin_routes + webhook_routes; фронт-редактор подключить к Admin API
 
 ## Открытые вопросы к команде
 
