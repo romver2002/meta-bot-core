@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.7"
+version: "1.9"
 updated: 2026-07-08
 verified_commit: ""
 owner: ""
@@ -59,6 +59,8 @@ owner: ""
 - 2026-07-08 — ADR-0007 вынести на ратификацию; при accepted — внести фронтенд-стек в architecture/tech-stack.md и описать контракт Admin API (CreateBot/PublishBot, обмен Flow).
 - 2026-07-08 — Первый реальный кейс после MVP конструктора — интернет-магазин с корзиной внутри Telegram/MAX: mini app-витрина (core/cart+core/catalog по ADR-0006), воронка в боте из блоков, платежи как platform-specific возможность по CapabilityMatrix, товары/заказы — отдельный bounded context Shop (ядро про них не знает).
 - 2026-07-08 — Реализовать infrastructure/db по ADR-0008 (models/mappers/repositories, Alembic, интеграционные тесты testcontainers) и admin_routes + webhook_routes; фронт-редактор подключить к Admin API
+- 2026-07-08 — MaxBotAdapter: оценить SDK maxapi (github.com/love-apples/maxapi — MIT, живая v1.2.1, aiogram-стиль на aiohttp) против тонкого httpx-клиента; проверить, что SDK ходит на platform-api2.max.ru (токен в Authorization); Dispatcher/Router не нужны — роутит Flow Engine; решение оформить как ADR-0009 по правилу зависимостей tech-stack.md
+- 2026-07-08 — Рендеринг исходящих сообщений (Message Dispatcher/адаптеры): использовать Templater/ (локальный референс, BigPixelLab) как источник дизайна декларативного описания сообщения (текст+клавиатуры+if/for+вложенные шаблоны); код НЕ вендорить — нет лицензии, eval() на данных, привязка к aiogram; писать нейтральную модель + рендер в адаптерах
 
 ## Открытые вопросы к команде
 
