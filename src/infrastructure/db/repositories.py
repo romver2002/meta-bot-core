@@ -17,6 +17,7 @@ from sqlalchemy.orm import selectinload
 from application.errors import ConcurrencyError, FlowNotFoundError
 from application.ports.flow_repository import FlowDraft
 from domain.bot.entities import Bot
+from domain.flow.codec import definition_hash, definition_to_flow, flow_to_definition
 from domain.flow.entities import Flow
 from domain.flow.version import FlowVersion, FlowVersionStatus
 from domain.session.entities import Session, SessionStatus
@@ -78,13 +79,13 @@ class PgFlowRepository:
                 return None
             flow_model, draft = pair
             return FlowDraft(
-                flow=mappers.definition_to_flow(flow_id, flow_model.name, draft.definition),
+                flow=definition_to_flow(flow_id, flow_model.name, draft.definition),
                 row_version=draft.row_version,
             )
 
     async def save_draft(self, flow: Flow, *, expected_row_version: int | None) -> int:
-        definition = mappers.flow_to_definition(flow)
-        digest = mappers.definition_hash(definition)
+        definition = flow_to_definition(flow)
+        digest = definition_hash(definition)
         try:
             async with self._session_factory() as db, db.begin():
                 flow_uuid = uuid.UUID(flow.id)

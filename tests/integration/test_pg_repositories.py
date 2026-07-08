@@ -9,11 +9,11 @@ import pytest
 from application.errors import ConcurrencyError
 from domain.bot.entities import MiniApp
 from domain.bot.value_objects import BotStatus
+from domain.flow.codec import flow_to_definition
 from domain.flow.entities import Flow, Node
 from domain.flow.value_objects import NodeType
 from domain.flow.version import FlowVersionStatus
 from domain.session.entities import Session
-from infrastructure.db.mappers import flow_to_definition
 from infrastructure.db.repositories import PgBotRepository, PgFlowRepository, PgSessionRepository
 from tests.unit.factories import make_bot, make_flow
 

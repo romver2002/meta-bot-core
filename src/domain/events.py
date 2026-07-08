@@ -29,6 +29,7 @@ class IncomingEvent:
     event_type: TriggerType
     text: str | None = None
     payload: str | None = None
+    update_id: str | None = None  # идентификатор update платформы — ключ идемпотентности
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
