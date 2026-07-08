@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.2"
+version: "1.3"
 updated: 2026-07-08
 verified_commit: ""
 owner: ""
@@ -17,22 +17,17 @@ owner: ""
 
 <!-- Что стабильно и на что можно опираться. Крупными блоками, не по коммитам. -->
 
-- 2026-07-06 — строгий контур Clean Architecture заведён: контракт
-  [../../.importlinter](../../.importlinter) (layers presentation→application→domain,
-  forbidden для domain, independence платформ), CI-джоба
-  [arch-lint](../../.github/workflows/arch-lint.yml) и протокол исправления
-  протечек [clean-architecture.md](../../.claude/rules/clean-architecture.md).
-- 2026-07-06 — реестр ADR заполнен: [0001](../decisions/0001-clean-architecture.md)
-  и [0002](../decisions/0002-domain-core-and-adapters.md) приняты (accepted),
-  0003–0008 заведены как proposed.
+- 2026-07-06 — строгий контур CA: [.importlinter](../../.importlinter)
+  (6 контрактов), CI [arch-lint](../../.github/workflows/arch-lint.yml) +
+  [ci.yml](../../.github/workflows/ci.yml) (ruff/mypy/pytest, coverage ≥90%).
+- 2026-07-06 — реестр ADR: 0001–0002 accepted, 0003–0008 proposed.
 - 2026-07-08 — вертикальный срез бэкенда в `src/` по канону CA: domain
   (Bot/Flow/Session, инварианты BR-001/003/006), application (6 портов,
   CreateBot/PublishBot), presentation (`/health`), скелет infrastructure.
   Контур качества зелёный: ruff (ALL) · mypy strict · `lint-imports` 5/5 ·
   pytest 32 unit. Стек: Python 3.14 + uv (`uv.lock`), Dockerfile + compose
   (PG16+Redis7) — по образцу sro-agent-core.
-- 2026-07-08 — прототип визуального редактора `frontend/constructor/`
-  (React + React Flow, ADR-0007): сборка и dev-сервер проверены.
+- 2026-07-08 — прототип редактора `frontend/constructor/` (React Flow, ADR-0007).
 - 2026-07-08 — хранение по ADR-0008 реализовано: ORM-модели, Pg-репозитории
   (версии Flow, оптимистический лок, единственная активная Session),
   Alembic-миграция 0001; интеграционные тесты на testcontainers (PG16) зелёные.
@@ -74,8 +69,13 @@ owner: ""
 - 2026-07-06 — не выбрано хранилище секретов за портом `TokenVaultPort`
   (token vault) — уточнить у команды; блокирует безопасную реализацию
   BR-004/BR-007, см. [../architecture/overview.md](../architecture/overview.md).
-- 2026-07-06 — не зафиксированы пороги покрытия тестами (разумный дефолт —
-  ≥80% на domain/application, уточнить у команды).
+- 2026-07-06 — не зафиксированы пороги покрытия тестами (в CI включён гейт
+  ≥90% на domain/application по testing-strategy.md; ратифицировать).
+- 2026-07-08 — отложено по аудиту (осознанно): (1) optimistic lock агрегата
+  Bot между get() и save() — до конкурентных админ-сценариев (IAM);
+  (2) seed `capability_matrix` в БД — матрицы v1 живут в адаптерах, таблица
+  ждёт ратификации ADR-0005; (3) `session.flow_version_id/current_node_id`
+  nullable вопреки design.md §1 — черновая сессия создаётся до первого шага.
 
 ---
 

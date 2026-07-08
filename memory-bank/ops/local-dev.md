@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-06
+version: "1.1"
+updated: 2026-07-08
 verified_commit: ""
 owner: ""
 ---
@@ -19,11 +19,10 @@ owner: ""
 Инструменты, без которых проект не поднимется. Точные версии — из
 [../architecture/tech-stack.md](../architecture/tech-stack.md).
 
-- [ ] Python 3.12 (единый async-рантайм backend). Windows: `winget install Python.Python.3.12`
-      либо через `pyenv`. Проверка: `python --version` → 3.12.x.
-- [ ] Менеджер зависимостей и lock-файл: **poetry** или **uv** — выбор команды
-      (`poetry.lock` / `uv.lock`), уточнить у команды. Примеры ниже даны для poetry;
-      для uv замените `poetry install` → `uv sync`, `poetry run X` → `uv run X`.
+- [ ] **uv** (менеджер зависимостей и версий Python): `winget install astral-sh.uv`.
+      Python 3.14 uv поставит сам по `.python-version` — отдельная установка не нужна.
+- [ ] Lock-файл — `uv.lock` (решение 2026-07-08); зависимости ставятся `uv sync`,
+      команды запускаются `uv run X`.
 - [ ] Docker Desktop + `docker compose` — для локальных PostgreSQL 16 и Redis 7
       (Docker Desktop ≥ 4.30). Проверка: `docker compose version`.
 - [ ] `src/` в `PYTHONPATH` (корневые пакеты слоёв — `domain`/`application`/
@@ -44,21 +43,23 @@ owner: ""
 3. Поднять инфраструктуру в контейнерах: PostgreSQL 16 (хранилище `Bot`/`Flow`/
    `Session`) и Redis 7 (runtime-состояние FSM `Session` и идемпотентность вебхуков).
 4. Установить зависимости из lock-файла.
-5. Применить миграции БД. Инструмент миграций (Alembic при SQLAlchemy 2 —
-   разумный дефолт) уточнить у команды. Создание миграций и любые разрушительные
-   операции — под политикой `policy_db_migrations` (см. «Правила» ниже).
+5. Применить миграции БД — **Alembic** (`alembic.ini` + `migrations/`; при
+   запуске через compose команда api применяет их сама). Создание миграций и
+   любые разрушительные операции — под политикой `policy_db_migrations`.
 6. Запустить FastAPI-приложение (presentation: admin API конструктора +
    webhook-роуты) через uvicorn. Composition root — `src/main.py`.
 
-Пример (poetry; для uv — эквиваленты из «Предусловий»):
+Пример:
 
 ```bash
 git clone <repo-url-meta-bot-core> && cd meta-bot-core
-cp .env.example .env                       # заполнить по configuration.md
-docker compose up -d postgres redis        # образы postgres:16, redis:7 — точные теги уточнить у команды
-poetry install                             # из poetry.lock (или: uv sync)
-poetry run alembic upgrade head            # применить миграции (инструмент уточнить у команды)
-poetry run uvicorn main:app --reload --port 8000   # src/ в PYTHONPATH → http://localhost:8000
+cp .env.example .env                # опционально: без .env compose берёт dev-дефолты
+docker compose up -d --build       # api (с миграциями) + postgres:16 + redis:7
+# либо только инфраструктура + API на хосте:
+docker compose up -d postgres redis
+uv sync                            # окружение из uv.lock (Python 3.14 поставит uv)
+uv run alembic upgrade head        # Postgres проброшен на localhost:5433
+uv run uvicorn main:app --reload --port 8000
 ```
 
 ## Приём вебхуков локально
@@ -89,11 +90,11 @@ API** Telegram/MAX: закрыты флагом `policy_external_api_calls` (`as
 Гоняются локально до пуша; те же проверки — в pre-commit и CI. Порядок:
 
 ```bash
-lint-imports                              # границы слоёв (import-linter, контракт .importlinter)
-poetry run ruff format . && poetry run ruff check .   # формат + линт
-poetry run mypy .                         # типизация, режим strict
-poetry run pytest -m unit                 # быстрые unit-тесты (domain + application)
-python scripts/validate_memory_bank.py    # валидность базы знаний (если правил memory-bank)
+PYTHONPATH=src uv run lint-imports          # границы слоёв (import-linter, .importlinter)
+uv run ruff format src tests migrations && uv run ruff check src tests migrations
+uv run mypy                                 # типизация, режим strict
+uv run pytest -m unit                       # быстрые unit-тесты (domain + application)
+python scripts/validate_memory_bank.py      # валидность базы знаний (если правил memory-bank)
 ```
 
 - `lint-imports` обязателен **до и после** правки `src/`: контракт — корневой
@@ -108,11 +109,11 @@ python scripts/validate_memory_bank.py    # валидность базы зна
 
 ## Как проверить, что всё поднялось
 
-- [ ] Healthcheck-эндпоинт отвечает: `GET /health` → 200 (точный путь — см.
-      [observability.md](observability.md) / уточнить у команды).
+- [ ] Healthcheck отвечает: `GET /healthchecks/` → 200 (сервис/версия/uptime);
+      `GET /healthchecks/services/` → статусы Postgres и Redis.
 - [ ] Сквозной путь MVP: вебхук `POST /webhooks/telegram/{bot_id}` принимается и
       порождает `IncomingEvent`; сценарий на `/start` отдаёт ответ (`SendMessageUseCase`).
-- [ ] Проверки проходят локально: `poetry run pytest -m unit`
+- [ ] Проверки проходят локально: `uv run pytest -m unit`
       (уровни — [../architecture/testing-strategy.md](../architecture/testing-strategy.md)).
 - [ ] В логах при старте нет ERROR (куда смотреть — [observability.md](observability.md)).
 
@@ -123,7 +124,8 @@ python scripts/validate_memory_bank.py    # валидность базы зна
 | Симптом | Причина | Решение |
 |---|---|---|
 | `connection refused` к БД/Redis при старте | Контейнер ещё не готов, приложение стартовало раньше | Дождаться healthy: `docker compose ps`; перезапустить uvicorn |
-| `ModuleNotFoundError: domain/application/...` | `src/` не в `PYTHONPATH` | `export PYTHONPATH=src` или запуск через менеджер (`poetry run`) |
+| `ModuleNotFoundError: domain/application/...` | `src/` не в `PYTHONPATH` | `export PYTHONPATH=src` или запуск через `uv run` (editable-установка) |
+| Порт 5432 занят другим Postgres | На машине уже работает чужой Postgres | Наш проброшен на `localhost:5433` (compose), менять ничего не нужно |
 | Telegram: webhook не регистрируется / бот не отвечает через туннель | Публичный порт не 443/80/88/8443, либо активен long polling (`getUpdates` конфликтует с webhook) | Использовать туннель на 443; отключить long polling, оставить один режим |
 | MAX: 401/404 на запросах Bot API | Обращение к старому `platform-api.max.ru` или токен в query | Перевести на `platform-api2.max.ru`, токен — в заголовке `Authorization` |
 | `lint-imports` красный после правки `src/` | Протечка слоя (импорт наружу / между платформами) | Чинить разворотом зависимости за порт, не глушить линтер ([../../.claude/rules/clean-architecture.md](../../.claude/rules/clean-architecture.md)) |
