@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.2"
+version: "1.3"
 updated: 2026-07-09
 verified_commit: ""
 owner: ""
@@ -110,7 +110,7 @@ python scripts/validate_memory_bank.py      # валидность базы зн
 ## Очистка локальных артефактов
 
 Инструменты складывают кеши в корень (`.mypy_cache`, `.ruff_cache`, `.pytest_cache`,
-`.import_linter_cache`, `.uv-cache`, `__pycache__`, `*.egg-info`, `.coverage`). В git
+`.import_linter_cache`, `__pycache__`, `*.egg-info`, `.coverage`). В git
 и Docker они не входят (`.gitignore`, `.dockerignore`) и скрыты из дерева VSCode
 (`.vscode/settings.json`). Сбросить их с диска — одной командой:
 
@@ -122,7 +122,8 @@ python scripts/clean.py --dry-run  # показать, что удалит, ни
 
 Рабочее окружение (`.venv/`, `node_modules/`) и секреты (`.env`) скрипт не трогает —
 всё удаляемое пересоздаётся инструментами. Кеш uv держится в общем кеше пользователя,
-а не в проекте (`[tool.uv]` в `pyproject.toml` без `cache-dir`).
+а не в проекте (`[tool.uv]` в `pyproject.toml` без `cache-dir`); `clean.py` дополнительно
+подчищает легаси-`.uv-cache` в корне, если он остался от прежней конфигурации.
 
 ## Как проверить, что всё поднялось
 

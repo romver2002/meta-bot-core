@@ -32,4 +32,5 @@ ruvector.db
 # внешний референс-репозиторий (чужой код без лицензии, в наш git не входит)
 Templater/
 .coverage
+coverage.xml
 htmlcov/

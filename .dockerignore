@@ -8,6 +8,10 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.import_linter_cache/
+.coverage
+coverage.xml
+htmlcov/
 *.egg-info/
 dist/
 node_modules/
@@ -24,3 +28,4 @@ ruvector.db
 .env
 .env.*
 !.env.example
+.secrets/

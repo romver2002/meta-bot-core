@@ -21,6 +21,7 @@ import os
 import shutil
 import stat
 import sys
+from fnmatch import fnmatch
 from pathlib import Path
 
 # Кириллица в выводе не должна ломаться в cp1251-консоли Windows (PowerShell/cmd).
@@ -37,6 +38,7 @@ DEFAULT_PATHS = (
     ".import_linter_cache",
     ".uv-cache",
     ".coverage",
+    "coverage.xml",
     "htmlcov",
     "dist",
     "frontend/constructor/dist",
@@ -51,8 +53,10 @@ DEEP_PATHS = (
     "ruvector.db",
 )
 
-# Рекурсивные шаблоны — мусор, разбросанный по дереву пакетов.
-GLOB_PATTERNS = ("**/__pycache__", "**/*.egg-info", "**/*.pyc")
+# Мусор, разбросанный по дереву: каталоги по имени/шаблону и файлы по шаблону.
+TRASH_DIR_NAMES = frozenset({"__pycache__"})
+TRASH_DIR_GLOBS = ("*.egg-info", "pytest-cache-files-*")
+TRASH_FILE_GLOBS = ("*.pyc", "*.egg-info")
 
 # Каталоги, внутрь которых не спускаемся при обходе (и никогда не удаляем).
 PRUNE_DIRS = {".git", ".venv", "venv", "node_modules", "Templater"}
@@ -103,13 +107,21 @@ def _remove(path: Path, *, dry_run: bool) -> int:
     return size
 
 
-def _iter_glob_targets() -> list[Path]:
+def _iter_tree_targets() -> list[Path]:
+    """Обходит дерево, НЕ спускаясь в PRUNE_DIRS, и собирает каталоги/файлы-мусор.
+
+    В отличие от ROOT.glob("**/…"), os.walk с in-place правкой dirs не заходит
+    внутрь .venv/node_modules/Templater/.git — они не сканируются вовсе.
+    """
     targets: list[Path] = []
-    for pattern in GLOB_PATTERNS:
-        for match in ROOT.glob(pattern):
-            if any(part in PRUNE_DIRS for part in match.relative_to(ROOT).parts):
-                continue
-            targets.append(match)
+    for current, dirs, files in os.walk(ROOT):
+        dirs[:] = [d for d in dirs if d not in PRUNE_DIRS]
+        base = Path(current)
+        matched = [d for d in dirs if d in TRASH_DIR_NAMES or any(fnmatch(d, g) for g in TRASH_DIR_GLOBS)]
+        targets.extend(base / name for name in matched)
+        # Внутрь помеченного на снос каталога спускаться незачем.
+        dirs[:] = [d for d in dirs if d not in matched]
+        targets.extend(base / name for name in files if any(fnmatch(name, g) for g in TRASH_FILE_GLOBS))
     return targets
 
 
@@ -121,7 +133,7 @@ def main(argv: list[str] | None = None) -> int:
 
     names = list(DEFAULT_PATHS) + (list(DEEP_PATHS) if args.deep else [])
     targets = [ROOT / name for name in names if (ROOT / name).exists()]
-    targets += _iter_glob_targets()
+    targets += _iter_tree_targets()
 
     # Убираем вложенность: если каталог уже в списке, не удаляем отдельно его
     # содержимое (иначе двойной счёт байтов и шумные строки после rmtree).

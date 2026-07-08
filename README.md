@@ -24,7 +24,7 @@
 
 ## Стек
 
-Python 3.12 (async) · FastAPI · PostgreSQL 16 + SQLAlchemy 2 · Redis 7 ·
+Python 3.14 (async) · FastAPI · PostgreSQL 16 + SQLAlchemy 2 · Redis 7 ·
 изолированный executor для Python-блоков · TypeScript mini app (отдельный
 web-продукт). Реестр — [memory-bank/architecture/tech-stack.md](memory-bank/architecture/tech-stack.md).
 
