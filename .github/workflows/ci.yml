@@ -1,0 +1,62 @@
+name: CI (lint, types, tests)
+
+# Контур качества по testing-strategy.md: ruff + mypy strict + unit с гейтом
+# покрытия >=90% на domain/application; интеграционные — против реального
+# Postgres 16 через testcontainers (docker есть на ubuntu-runner'ах).
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # hatch-vcs: версия из истории git
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Установка окружения (uv.lock)
+        run: uv sync --frozen
+
+      - name: Формат (ruff format --check)
+        run: uv run ruff format --check src tests migrations
+
+      - name: Линт (ruff check)
+        run: uv run ruff check src tests migrations
+
+      - name: Типы (mypy strict)
+        run: uv run mypy
+
+      - name: Unit-тесты + покрытие domain/application >= 90%
+        run: >-
+          uv run pytest -m unit
+          --cov=domain --cov=application
+          --cov-report=term-missing
+          --cov-fail-under=90
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Установка окружения (uv.lock)
+        run: uv sync --frozen
+
+      - name: Интеграционные тесты (testcontainers, Postgres 16)
+        run: uv run pytest -m integration

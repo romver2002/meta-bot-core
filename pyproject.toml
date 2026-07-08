@@ -105,4 +105,5 @@ ignore = [
 strict = true
 python_version = "3.14"
 mypy_path = "src"
-packages = ["domain", "application", "infrastructure"]
+packages = ["domain", "application", "infrastructure", "presentation"]
+modules = ["main"]
