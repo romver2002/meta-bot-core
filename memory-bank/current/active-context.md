@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.11"
+version: "1.12"
 updated: 2026-07-08
 verified_commit: ""
 owner: ""
@@ -46,6 +46,7 @@ owner: ""
 - 2026-07-08 — Хранение по ADR-0008: модели/мапперы/Pg-репозитории (версии Flow, оптимистический лок, partial-unique активной Session), Alembic 0001. Гейт: ruff/mypy/lint-imports/pytest 32 unit + 4 integration (testcontainers, PG16) — зелёные.
 - 2026-07-08 — Проверено версионирование memory-bank: схема, hook/CI, валидатор и тесты инструментов; вывод — работает механически по diff тела, с ограничениями
 - 2026-07-08 — Адверсариальный аудит (50 агентов): 40 подтверждённых находок исправлено (TOCTOU публикации, идемпотентный publish, create-коллизия, завершение Session, non-root Docker, loopback-порты, CI с тестами и покрытием 96%); отложенное зафиксировано в progress. Гейт: 72 теста, mypy 52 файла, 6/6 контрактов
+- 2026-07-08 — Живой контур: адаптеры Telegram/MAX (ADR-0009, тонкий httpx), webhook с идемпотентностью Redis, Admin API (create/flow/publish/get), Flow Engine подключён в composition root. Гейт: 84 теста (в т.ч. e2e золотого пути и живой смоук на PG), mypy 72 файла, 6/6 контрактов
 
 ## Следующие шаги
 
