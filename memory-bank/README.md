@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.2"
+version: "1.3"
 updated: 2026-07-08
 verified_commit: ""
 owner: "teamlead"
@@ -72,6 +72,7 @@ owner: "teamlead"
 - [0006-mini-app-as-web-product.md](decisions/0006-mini-app-as-web-product.md) — mini app как отдельный web-продукт (proposed)
 - [0007-visual-flow-editor.md](decisions/0007-visual-flow-editor.md) — визуальный редактор сценариев: React + React Flow (proposed)
 - [0008-persistence-model.md](decisions/0008-persistence-model.md) — модель хранения: версии Flow в JSONB, Session в PG+Redis (proposed)
+- [0009-max-adapter-thin-client.md](decisions/0009-max-adapter-thin-client.md) — MaxBotAdapter: тонкий httpx-клиент вместо SDK maxapi (proposed)
 
 ### workflows/ — процессы под тип задачи (стабильный)
 - [new-feature.md](workflows/new-feature.md) — процесс новой фичи (включая связку со spec-kit)

@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.3"
+version: "1.4"
 updated: 2026-07-08
 verified_commit: ""
 owner: ""
@@ -47,7 +47,8 @@ owner: ""
 
 | Проблема | Влияние | Обходной путь | Issue |
 |---|---|---|---|
-| Presentation — только `/health`: нет admin/webhook-роутов и Flow Engine | Сквозной путь Admin UI→webhook→движок пока не работает | Хранение (PG) готово и покрыто интеграционными тестами; следующий этап — роуты и движок | — |
+| Нет IAM: Admin API без аутентификации; token vault — dev-файл (`.secrets/`) | Контур только для доверенной среды разработки | Auth и прод-vault — открытые вопросы active-context; порты позволяют заменить без правки ядра | — |
+| Блоки open_mini_app / http_request / custom_code движком не исполняются | Сценарии с ними не публикуются (BR-006 отсекает по CapabilityMatrix v1) | Реализуются своими этапами (mini app, HTTP-порт, песочница ADR-0003) | — |
 
 ## Расхождения база↔код
 
@@ -55,11 +56,10 @@ owner: ""
      (или между документами) — НЕ исправляя их молча, см. [../_meta/lifecycle.md](../_meta/lifecycle.md).
      Расхождение устранено (документ или код поправлен) → строку удалить. -->
 
-- 2026-07-08 — канонический список портов ([../architecture/overview.md](../architecture/overview.md),
-  glossary) не содержит `BotRepository`, но `CreateBotUseCase`/`PublishBotUseCase`
-  требуют персистенцию агрегата `Bot` — порт добавлен в
-  `src/application/ports/bot_repository.py`; внести в glossary/patterns
-  при ратификации [ADR-0008](../decisions/0008-persistence-model.md).
+- 2026-07-08 — канон портов/use case'ов ([../architecture/overview.md](../architecture/overview.md))
+  не содержит `BotRepository`, `IdempotencyPort`, `SaveFlowDraftUseCase`,
+  `GetBotUseCase` — добавлены кодом (Admin API/webhook их требуют); внести в
+  glossary/patterns/overview при ратификации ADR-0008/0009.
 
 ## Технический долг
 
