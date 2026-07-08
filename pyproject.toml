@@ -93,6 +93,8 @@ ignore = [
     "EM101", "EM102",
     # Конструкторы use case'ов инъектируют коллабораторов осознанно (явный DI).
     "PLR0913",
+    # Порты/адаптеры осознанно прокидывают timeout параметром (HttpClientPort).
+    "ASYNC109",
 ]
 
 [tool.ruff.lint.per-file-ignores]

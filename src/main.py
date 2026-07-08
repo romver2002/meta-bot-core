@@ -24,12 +24,14 @@ from application.use_cases.get_bot import GetBotUseCase
 from application.use_cases.process_update import ProcessUpdateUseCase
 from application.use_cases.publish_bot import PublishBotUseCase
 from application.use_cases.save_flow_draft import SaveFlowDraftUseCase
+from application.use_cases.set_connection_secret import SetConnectionSecretUseCase
 from application.use_cases.submit_mini_app_result import SubmitMiniAppResultUseCase
 from domain.bot.value_objects import Platform
 from infrastructure.cache.redis_idempotency import RedisIdempotency
 from infrastructure.config import Settings
 from infrastructure.db.engine import build_engine, build_session_factory
 from infrastructure.db.repositories import PgBotRepository, PgFlowRepository, PgSessionRepository
+from infrastructure.http.httpx_client import HttpxClient
 from infrastructure.integrations.health_checks import (
     InfraHealthServiceProbe,
     SettingsHealthServiceRegistry,
@@ -37,6 +39,7 @@ from infrastructure.integrations.health_checks import (
 from infrastructure.platforms.factory import RegistryPlatformFactory
 from infrastructure.platforms.max.adapter import MaxBotAdapter
 from infrastructure.platforms.telegram.adapter import TelegramBotAdapter
+from infrastructure.security.file_connection_secrets import FileConnectionSecrets
 from infrastructure.security.file_token_vault import FileTokenVault
 from presentation.api.admin_routes import admin
 from presentation.api.health_routes import health
@@ -48,6 +51,7 @@ from presentation.providers.admin import (
     get_get_bot_uc,
     get_publish_bot_uc,
     get_save_flow_draft_uc,
+    get_set_connection_secret_uc,
     get_submit_mini_app_result_uc,
 )
 from presentation.providers.system import get_healthcheck_uc, get_services_healthcheck_uc
@@ -87,12 +91,15 @@ def create_app() -> FastAPI:
         }
     )
     idempotency = RedisIdempotency.from_settings(settings)
+    connection_secrets = FileConnectionSecrets(settings.connection_secrets_file)
     process_update = ProcessUpdateUseCase(
         bots=bots,
         flows=flows,
         sessions=sessions,
         token_vault=token_vault,
         platform_factory=platform_factory,
+        http_client=HttpxClient(http_client),
+        secrets=connection_secrets,
     )
 
     app = FastAPI(
@@ -124,6 +131,7 @@ def create_app() -> FastAPI:
             bots=bots, token_vault=token_vault, platform_factory=platform_factory
         ),
         get_attach_mini_app_uc: lambda: AttachMiniAppUseCase(bots=bots),
+        get_set_connection_secret_uc: lambda: SetConnectionSecretUseCase(bots=bots, secrets=connection_secrets),
         get_submit_mini_app_result_uc: lambda: SubmitMiniAppResultUseCase(
             bots=bots,
             token_vault=token_vault,

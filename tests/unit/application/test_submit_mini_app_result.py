@@ -15,8 +15,10 @@ from tests.unit.application.fakes import (
     InMemoryFlowRepository,
     InMemorySessionRepository,
     InMemoryTokenVault,
+    StubHttpClient,
     StubPlatform,
     StubPlatformFactory,
+    StubSecretResolver,
 )
 from tests.unit.factories import full_capabilities, make_bot
 
@@ -47,7 +49,13 @@ async def _use_case(validator) -> tuple[SubmitMiniAppResultUseCase, StubPlatform
         id="v1", flow_id="f", status=FlowVersionStatus.PUBLISHED, flow=_flow(), version=1
     )
     process = ProcessUpdateUseCase(
-        bots=bots, flows=flows, sessions=sessions, token_vault=vault, platform_factory=factory
+        bots=bots,
+        flows=flows,
+        sessions=sessions,
+        token_vault=vault,
+        platform_factory=factory,
+        http_client=StubHttpClient(),
+        secrets=StubSecretResolver(),
     )
     return SubmitMiniAppResultUseCase(
         bots=bots, token_vault=vault, platform_factory=factory, process_update=process

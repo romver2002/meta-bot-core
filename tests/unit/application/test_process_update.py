@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from application.errors import FlowExecutionError
+from application.ports.http_client import HttpResponse
 from application.use_cases.process_update import ProcessUpdateUseCase
 from domain.bot.entities import MiniApp
 from domain.bot.value_objects import BotStatus, Platform
@@ -18,8 +19,10 @@ from tests.unit.application.fakes import (
     InMemoryFlowRepository,
     InMemorySessionRepository,
     InMemoryTokenVault,
+    StubHttpClient,
     StubPlatform,
     StubPlatformFactory,
+    StubSecretResolver,
 )
 from tests.unit.factories import full_capabilities, make_bot
 
@@ -85,7 +88,14 @@ def _event(event_type: TriggerType, *, text: str | None = None, payload: str | N
     )
 
 
-async def _engine(flow: Flow, *, bot_status: BotStatus = BotStatus.PUBLISHED, mini_app_url: str | None = None):
+async def _engine(
+    flow: Flow,
+    *,
+    bot_status: BotStatus = BotStatus.PUBLISHED,
+    mini_app_url: str | None = None,
+    http_client: StubHttpClient | None = None,
+    secrets: StubSecretResolver | None = None,
+):
     bots, flows = InMemoryBotRepository(), InMemoryFlowRepository()
     sessions, vault = InMemorySessionRepository(), InMemoryTokenVault()
     platform_port = StubPlatform(full_capabilities())
@@ -106,6 +116,8 @@ async def _engine(flow: Flow, *, bot_status: BotStatus = BotStatus.PUBLISHED, mi
         sessions=sessions,
         token_vault=vault,
         platform_factory=StubPlatformFactory(platform_port),
+        http_client=http_client or StubHttpClient(),
+        secrets=secrets or StubSecretResolver(),
     )
     return use_case, platform_port, sessions
 
@@ -258,6 +270,55 @@ async def test_open_mini_app_without_attached_app_errors() -> None:
     use_case, _, _ = await _engine(_mini_app_flow(), mini_app_url=None)
     with pytest.raises(FlowExecutionError, match="mini app"):
         await use_case.execute(_event(TriggerType.START))
+
+
+def _http_flow() -> Flow:
+    """/start -> http_request -> (next) ответ / (error) заглушка."""
+    return Flow(
+        id="f-http",
+        name="http",
+        nodes={
+            "call": Node(
+                id="call",
+                type=NodeType.HTTP_REQUEST,
+                params={
+                    "method": "POST",
+                    "url": "https://api.example.com/ask",
+                    "headers": {"Authorization": "Bearer {{secret:api}}"},
+                    "body": {"q": "hi"},
+                    "response_map": {"answer": "choices.0.text"},
+                },
+            ),
+            "reply": Node(id="reply", type=NodeType.SEND_MESSAGE, params={"text": "Ответ: {answer}"}),
+            "oops": Node(id="oops", type=NodeType.SEND_MESSAGE, params={"text": "Сервис недоступен"}),
+        },
+        triggers=(Trigger(id="t", type=TriggerType.START, target_node_id="call"),),
+        transitions=(
+            Transition(source_node_id="call", target_node_id="reply", on="next"),
+            Transition(source_node_id="call", target_node_id="oops", on="error"),
+        ),
+    )
+
+
+async def test_http_request_injects_secret_and_maps_response() -> None:
+    http = StubHttpClient(HttpResponse(status_code=200, json={"choices": [{"text": "42"}]}, text=""))
+    use_case, port, _ = await _engine(_http_flow(), http_client=http, secrets=StubSecretResolver({"api": "KEY-123"}))
+
+    await use_case.execute(_event(TriggerType.START))
+
+    # Секрет подставлен из хранилища, а НЕ хранится в определении Flow.
+    assert http.calls[0]["headers"] == {"Authorization": "Bearer KEY-123"}
+    assert http.calls[0]["json_body"] == {"q": "hi"}
+    assert port.sent[-1].text == "Ответ: 42"  # поле ответа смаплено в {answer}
+
+
+async def test_http_request_error_routes_to_error_branch() -> None:
+    http = StubHttpClient(HttpResponse(status_code=503, json=None, text="down"))
+    use_case, port, _ = await _engine(_http_flow(), http_client=http)
+
+    await use_case.execute(_event(TriggerType.START))
+
+    assert port.sent[-1].text == "Сервис недоступен"
 
 
 async def test_cyclic_flow_hits_step_limit() -> None:

@@ -22,5 +22,6 @@ class Settings(BaseSettings):
     session_idle_ttl: int = 3600
     webhook_idempotency_ttl: int = 86400
     webhook_secret: str | None = None  # сверяется с X-*-Secret заголовком платформы
-    # Путь к файлу dev-vault (не секрет); прод-хранилище — открытый вопрос.
-    token_vault_file: str = ".secrets/token-vault.json"  # noqa: S105
+    # Пути к dev-хранилищам секретов (сами пути — не секрет; прод — открытый вопрос).
+    token_vault_file: str = ".secrets/token-vault.json"  # noqa: S105 — путь к файлу, не пароль
+    connection_secrets_file: str = ".secrets/connections.json"

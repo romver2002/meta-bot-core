@@ -23,6 +23,7 @@ from application.use_cases.create_bot import CreateBotUseCase
 from application.use_cases.get_bot import GetBotUseCase
 from application.use_cases.publish_bot import PublishBotUseCase
 from application.use_cases.save_flow_draft import SaveFlowDraftUseCase
+from application.use_cases.set_connection_secret import SetConnectionSecretUseCase
 from application.use_cases.submit_mini_app_result import SubmitMiniAppResultUseCase
 from domain.bot.value_objects import Platform
 from domain.errors import (
@@ -38,6 +39,7 @@ from presentation.providers.admin import (
     get_get_bot_uc,
     get_publish_bot_uc,
     get_save_flow_draft_uc,
+    get_set_connection_secret_uc,
     get_submit_mini_app_result_uc,
 )
 from presentation.schemas.admin import (
@@ -50,6 +52,7 @@ from presentation.schemas.admin import (
     PublishResponse,
     SaveFlowRequest,
     SaveFlowResponse,
+    SetConnectionSecretRequest,
 )
 
 admin = APIRouter()
@@ -164,3 +167,20 @@ async def submit_mini_app_result(
     except MiniAppAuthError as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
     return {"ok": True}
+
+
+@admin.put(
+    "/bots/{bot_id}/connections/{name}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Задать секрет подключения (ключ внешнего API для http_request)",
+)
+async def set_connection_secret(
+    bot_id: str,
+    name: str,
+    request: SetConnectionSecretRequest,
+    use_case: Annotated[SetConnectionSecretUseCase, Depends(get_set_connection_secret_uc)],
+) -> None:
+    try:
+        await use_case.execute(bot_id, name, request.value)
+    except BotNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.7"
-updated: 2026-07-08
+version: "1.8"
+updated: 2026-07-09
 verified_commit: ""
 owner: ""
 ---
@@ -23,17 +23,16 @@ owner: ""
 - 2026-07-06 — реестр ADR: 0001–0002 accepted, 0003–0009 proposed.
 - 2026-07-08 — бэкенд по канону CA (Python 3.14 + uv, PG16+Redis7): domain (Bot/Flow/Session, BR-001/003/006), хранение ADR-0008, Flow Engine, адаптеры Telegram/MAX, webhook с идемпотентностью, Admin API. Гейт зелёный: ruff · mypy strict · lint-imports 6 контрактов · 81 unit + 4 integration · e2e золотого пути + живой смоук.
 - 2026-07-08 — прототип редактора `frontend/constructor/` (React Flow, ADR-0007).
-- 2026-07-08 — mini app end-to-end: auth init data (BR-007, общий `mini_app_identity.py`,
-  проверка `user.id`), блок `open_mini_app` (кнопка запуска web_app/open_app) и
-  триггер `mini_app_result` (эндпоинт результата → движок); привязка mini app к боту.
+- 2026-07-08 — mini app end-to-end: auth init data (BR-007), блок `open_mini_app`, триггер `mini_app_result`, привязка mini app к боту.
+- 2026-07-09 — блок `http_request` (звонок в любой HTTP-API, `{{secret:*}}` за портом) + секреты подключения за портом; AI-ответ через OpenRouter выражается ДАННЫМИ Flow, без бото-специфики в ядре.
 
 ## В работе
 
 <!-- Начато, но не завершено; в каком состоянии оставлено и что дальше. -->
 
 - 2026-07-08 — ратификация ADR [0003](../decisions/0003-flow-engine-blocks-and-sandbox.md)–[0009](../decisions/0009-max-adapter-thin-client.md):
-  пока proposed, ждут решения команды. Следом — редактор ↔ Admin API;
-  затем блок http_request и песочница custom_code (ADR-0003).
+  пока proposed, ждут решения команды. Следом — уведомление админа (send в
+  заданный chat) для формы заявки, редактор ↔ Admin API, песочница custom_code.
 
 ## Известные проблемы
 
@@ -43,7 +42,7 @@ owner: ""
 | Проблема | Влияние | Обходной путь | Issue |
 |---|---|---|---|
 | Нет IAM: Admin API без аутентификации; token vault — dev-файл (`.secrets/`) | Контур только для доверенной среды разработки | Auth и прод-vault — открытые вопросы active-context; порты позволяют заменить без правки ядра | — |
-| Блоки http_request / custom_code движком не исполняются | Сценарии с ними не публикуются (BR-006 отсекает по CapabilityMatrix v1) | Реализуются своими этапами (HTTP-порт, песочница ADR-0003) | — |
+| Блок custom_code движком не исполняется | Сценарии с ним не публикуются (BR-006 по CapabilityMatrix v1) | Реализуется своим этапом (песочница ADR-0003) | — |
 
 ## Расхождения база↔код
 
@@ -52,9 +51,9 @@ owner: ""
      Расхождение устранено (документ или код поправлен) → строку удалить. -->
 
 - 2026-07-08 — канон портов/use case'ов ([../architecture/overview.md](../architecture/overview.md))
-  не содержит порты/use case'ы Admin API/webhook/mini app (`BotRepository`,
-  `IdempotencyPort`, Save/Get/Authenticate/Attach/SubmitMiniApp-use case'ы,
-  `BotPlatformPort.validate_init_data`) — добавлены кодом; внести в
+  не содержит порты/use case'ы Admin API/webhook/mini app/http (`BotRepository`,
+  `IdempotencyPort`, `HttpClientPort`, `SecretResolverPort`, mini-app/connection
+  use case'ы, `BotPlatformPort.validate_init_data`) — добавлены кодом; внести в
   glossary/patterns/overview при ратификации ADR-0008/0009.
 
 ## Технический долг

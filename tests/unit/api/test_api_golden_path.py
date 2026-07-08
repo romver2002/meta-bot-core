@@ -34,9 +34,11 @@ from tests.unit.application.fakes import (
     InMemoryFlowRepository,
     InMemorySessionRepository,
     InMemoryTokenVault,
+    StubHttpClient,
     StubIdempotency,
     StubPlatform,
     StubPlatformFactory,
+    StubSecretResolver,
 )
 from tests.unit.factories import full_capabilities, make_flow
 
@@ -70,6 +72,8 @@ def _build_app() -> tuple[FastAPI, StubPlatform, StubIdempotency]:
                 sessions=sessions,
                 token_vault=vault,
                 platform_factory=factory,
+                http_client=StubHttpClient(),
+                secrets=StubSecretResolver(),
             ),
         }
     )

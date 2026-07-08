@@ -12,20 +12,24 @@ webhook-роуте), находит бота и его опубликованн�
 4. иначе — матчинг входных триггеров; нераспознанное событие игнорируется.
 
 Поддерживаемые блоки v1: send_message, show_buttons, ask, condition, save,
-open_mini_app. Остальные типы отклоняются при публикации CapabilityMatrix
-адаптеров (BR-006); здесь — защита в глубину через FlowExecutionError.
+open_mini_app, http_request. Остальные типы отклоняются при публикации
+CapabilityMatrix адаптеров (BR-006); здесь — защита в глубину.
 """
 
 from __future__ import annotations
 
 import dataclasses
+import re
 import uuid
 from collections.abc import Awaitable, Callable
+from typing import Any
 
 from application.errors import BotNotFoundError, FlowExecutionError, FlowNotFoundError
 from application.ports.bot_platform import PlatformFactory, SendMessageCommand
 from application.ports.bot_repository import BotRepository
+from application.ports.connection_secrets import SecretResolverPort
 from application.ports.flow_repository import FlowRepository
+from application.ports.http_client import HttpClientPort
 from application.ports.session_repository import SessionRepository
 from application.ports.token_vault import TokenVaultPort
 from domain.bot.value_objects import BotStatus
@@ -37,6 +41,7 @@ from domain.flow.value_objects import ButtonAction, NodeType, TriggerType
 from domain.session.entities import Session
 
 MAX_STEPS = 64
+_SECRET_TOKEN = re.compile(r"\{\{secret:([A-Za-z0-9_.-]+)\}\}")
 
 _Send = Callable[[str, tuple[Button, ...]], Awaitable[None]]
 
@@ -46,6 +51,44 @@ class _Route:
     """Событие распознано; ``start_node_id=None`` — цепочка уже завершена."""
 
     start_node_id: str | None
+
+
+def _interpolate(value: object, variables: dict[str, object]) -> object:
+    """Рекурсивно подставляет {переменные} в строковые листья тела запроса."""
+    if isinstance(value, str):
+        return render_text(value, variables)
+    if isinstance(value, dict):
+        return {key: _interpolate(item, variables) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_interpolate(item, variables) for item in value]
+    return value
+
+
+def _dig(payload: object, path: str) -> object:
+    """Достаёт значение по dotted-пути (`choices.0.message.content`)."""
+    current = payload
+    for part in path.split("."):
+        if isinstance(current, dict):
+            current = current.get(part)
+        elif isinstance(current, list):
+            try:
+                current = current[int(part)]
+            except ValueError, IndexError:
+                return None
+        else:
+            return None
+    return current
+
+
+def _extract(payload: dict[str, Any], response_map: object) -> dict[str, object]:
+    """Маппит поля ответа в переменные сценария по response_map."""
+    result: dict[str, object] = {}
+    if isinstance(response_map, dict):
+        for var, path in response_map.items():
+            value = _dig(payload, str(path))
+            if value is not None:
+                result[str(var)] = value
+    return result
 
 
 class ProcessUpdateUseCase:
@@ -58,12 +101,16 @@ class ProcessUpdateUseCase:
         sessions: SessionRepository,
         token_vault: TokenVaultPort,
         platform_factory: PlatformFactory,
+        http_client: HttpClientPort,
+        secrets: SecretResolverPort,
     ) -> None:
         self._bots = bots
         self._flows = flows
         self._sessions = sessions
         self._token_vault = token_vault
         self._platform_factory = platform_factory
+        self._http_client = http_client
+        self._secrets = secrets
 
     async def execute(self, event: IncomingEvent) -> None:
         bot = await self._bots.get(event.bot_id)
@@ -106,7 +153,7 @@ class ProcessUpdateUseCase:
         if route is None:
             return  # нераспознанное событие — сценарий не трогаем
 
-        chain_ended = await self._run_chain(flow, route.start_node_id, session, send, mini_app_url)
+        chain_ended = await self._run_chain(flow, route.start_node_id, session, send, bot.id, mini_app_url)
         if chain_ended:
             # Сценарий дошёл до конца: пара (Bot, user) свободна, следующий
             # триггер начнёт новую сессию на актуальной версии (ADR-0008).
@@ -163,12 +210,13 @@ class ProcessUpdateUseCase:
 
     # ── исполнение цепочки блоков ────────────────────────────────────────────
 
-    async def _run_chain(
+    async def _run_chain(  # noqa: PLR0912 — диспетчер по типу блока, ветвление по своей природе
         self,
         flow: Flow,
         start_node_id: str | None,
         session: Session,
         send: _Send,
+        bot_id: str,
         mini_app_url: str | None,
     ) -> bool:
         """Исполняет цепочку узлов; True — сценарий дошёл до конца (нет ожидания)."""
@@ -203,6 +251,14 @@ class ProcessUpdateUseCase:
                     (Button(label=label, action=ButtonAction.OPEN_MINI_APP, target=mini_app_url),),
                 )
                 return False  # ждём результат mini app (mini_app_result)
+            elif node.type is NodeType.HTTP_REQUEST:
+                http_outcome, extracted = await self._execute_http(node.params, session, bot_id)
+                for key, value in extracted.items():
+                    session.remember(key, value)
+                target = self._transition_target(flow, node.id, http_outcome)
+                if target is None and http_outcome != "next":
+                    target = self._transition_target(flow, node.id, "next")
+                node_id = target
             elif node.type is NodeType.CONDITION:
                 outcome = evaluate_condition(str(node.params.get("expression", "")), session.variables)
                 node_id = self._transition_target(flow, node.id, "true" if outcome else "false")
@@ -215,6 +271,44 @@ class ProcessUpdateUseCase:
             else:
                 raise FlowExecutionError(f"Блок {node.type} ещё не поддерживается движком (отклоняется BR-006)")
         raise FlowExecutionError(f"Превышен лимит {MAX_STEPS} шагов — вероятен цикл в сценарии {flow.id!r}")
+
+    # ── http_request ─────────────────────────────────────────────────────────
+
+    async def _execute_http(
+        self, params: dict[str, object], session: Session, bot_id: str
+    ) -> tuple[str, dict[str, object]]:
+        """Выполняет внешний HTTP-вызов; возвращает исход ('next'|'error') и переменные."""
+        method = str(params.get("method", "GET")).upper()
+        url = render_text(str(params.get("url", "")), session.variables)
+        headers = await self._build_headers(params.get("headers"), session, bot_id)
+        body = _interpolate(params.get("body"), session.variables)
+        try:
+            timeout = float(params.get("timeout", 10) or 10)  # type: ignore[arg-type]
+        except TypeError, ValueError:
+            timeout = 10.0
+
+        response = await self._http_client.request(
+            method=method, url=url, headers=headers, json_body=body, timeout=timeout
+        )
+        if response.status_code == 0 or response.status_code >= 400:  # noqa: PLR2004
+            return "error", {}
+        return "next", _extract(response.json or {}, params.get("response_map"))
+
+    async def _build_headers(self, raw: object, session: Session, bot_id: str) -> dict[str, str]:
+        headers: dict[str, str] = {}
+        if isinstance(raw, dict):
+            for key, value in raw.items():
+                rendered = render_text(str(value), session.variables)
+                headers[str(key)] = await self._resolve_secrets(rendered, bot_id)
+        return headers
+
+    async def _resolve_secrets(self, value: str, bot_id: str) -> str:
+        """Подставляет {{secret:имя}} значениями из хранилища секретов подключения."""
+        result = value
+        for match in _SECRET_TOKEN.finditer(value):
+            secret = await self._secrets.resolve(bot_id, match.group(1))
+            result = result.replace(match.group(0), secret or "")
+        return result
 
     @staticmethod
     def _transition_target(flow: Flow, node_id: str | None, outcome: str) -> str | None:

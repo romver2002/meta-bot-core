@@ -71,3 +71,7 @@ class AttachMiniAppRequest(BaseModel):
 class MiniAppResultRequest(BaseModel):
     init_data: str = Field(min_length=1)
     result: dict[str, Any] = Field(default_factory=dict)
+
+
+class SetConnectionSecretRequest(BaseModel):
+    value: str = Field(min_length=1, description="Секрет интеграции (ключ внешнего API)")

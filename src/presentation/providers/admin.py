@@ -8,6 +8,7 @@ from application.use_cases.create_bot import CreateBotUseCase
 from application.use_cases.get_bot import GetBotUseCase
 from application.use_cases.publish_bot import PublishBotUseCase
 from application.use_cases.save_flow_draft import SaveFlowDraftUseCase
+from application.use_cases.set_connection_secret import SetConnectionSecretUseCase
 from application.use_cases.submit_mini_app_result import SubmitMiniAppResultUseCase
 
 
@@ -24,6 +25,10 @@ def get_attach_mini_app_uc() -> AttachMiniAppUseCase:
 
 
 def get_submit_mini_app_result_uc() -> SubmitMiniAppResultUseCase:
+    raise NotImplementedError("Провайдер подключается в composition root (src/main.py)")
+
+
+def get_set_connection_secret_uc() -> SetConnectionSecretUseCase:
     raise NotImplementedError("Провайдер подключается в composition root (src/main.py)")
 
 

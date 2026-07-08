@@ -7,6 +7,7 @@ from collections.abc import Callable, Mapping
 from application.errors import ConcurrencyError
 from application.ports.bot_platform import MiniAppIdentity, SendMessageCommand
 from application.ports.flow_repository import FlowDraft
+from application.ports.http_client import HttpResponse
 from domain.bot.entities import Bot
 from domain.bot.value_objects import Platform
 from domain.capabilities import CapabilityMatrix
@@ -170,3 +171,33 @@ class StubPlatformFactory:
     def for_platform(self, platform: Platform) -> StubPlatform:
         self.requested.append(platform)
         return self._platform_port
+
+
+class StubHttpClient:
+    """Управляемый фейк HttpClientPort: возвращает заданный ответ, пишет вызовы."""
+
+    def __init__(self, response: HttpResponse | None = None) -> None:
+        self.response = response or HttpResponse(status_code=200, json={}, text="")
+        self.calls: list[dict[str, object]] = []
+
+    async def request(
+        self,
+        *,
+        method: str,
+        url: str,
+        headers: Mapping[str, str],
+        json_body: object | None,
+        timeout: float,
+    ) -> HttpResponse:
+        self.calls.append({"method": method, "url": url, "headers": dict(headers), "json_body": json_body})
+        return self.response
+
+
+class StubSecretResolver:
+    """In-memory SecretResolverPort (секреты подключения по имени)."""
+
+    def __init__(self, secrets: dict[str, str] | None = None) -> None:
+        self._secrets = secrets or {}
+
+    async def resolve(self, bot_id: str, name: str) -> str | None:
+        return self._secrets.get(name)
