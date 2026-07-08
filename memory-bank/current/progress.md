@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.8"
+version: "1.9"
 updated: 2026-07-09
 verified_commit: ""
 owner: ""
@@ -17,22 +17,21 @@ owner: ""
 
 <!-- Что стабильно и на что можно опираться. Крупными блоками, не по коммитам. -->
 
-- 2026-07-06 — строгий контур CA: [.importlinter](../../.importlinter)
-  (6 контрактов), CI [arch-lint](../../.github/workflows/arch-lint.yml) +
-  [ci.yml](../../.github/workflows/ci.yml) (ruff/mypy/pytest, coverage ≥90%).
+- 2026-07-06 — строгий контур CA: [.importlinter](../../.importlinter) (6 контрактов) + CI
+  [arch-lint](../../.github/workflows/arch-lint.yml)/[ci.yml](../../.github/workflows/ci.yml) (ruff/mypy/pytest, coverage ≥90%).
 - 2026-07-06 — реестр ADR: 0001–0002 accepted, 0003–0009 proposed.
 - 2026-07-08 — бэкенд по канону CA (Python 3.14 + uv, PG16+Redis7): domain (Bot/Flow/Session, BR-001/003/006), хранение ADR-0008, Flow Engine, адаптеры Telegram/MAX, webhook с идемпотентностью, Admin API. Гейт зелёный: ruff · mypy strict · lint-imports 6 контрактов · 81 unit + 4 integration · e2e золотого пути + живой смоук.
 - 2026-07-08 — прототип редактора `frontend/constructor/` (React Flow, ADR-0007).
 - 2026-07-08 — mini app end-to-end: auth init data (BR-007), блок `open_mini_app`, триггер `mini_app_result`, привязка mini app к боту.
 - 2026-07-09 — блок `http_request` (звонок в любой HTTP-API, `{{secret:*}}` за портом) + секреты подключения за портом; AI-ответ через OpenRouter выражается ДАННЫМИ Flow, без бото-специфики в ядре.
+- 2026-07-09 — первый бот «умный помощник по заявкам» как Flow-данные ([examples/first-bot-request-assistant/](../../examples/first-bot-request-assistant/)): каркас + живой AI-ответ (OpenRouter) + форма; live-smoke в Telegram пройден (навигация/меню вживую). Движковый must-fix остаточной `http_request`-переменной (null-content → прошлый ответ) починен + регресс-тест.
 
 ## В работе
 
 <!-- Начато, но не завершено; в каком состоянии оставлено и что дальше. -->
 
-- 2026-07-08 — ратификация ADR [0003](../decisions/0003-flow-engine-blocks-and-sandbox.md)–[0009](../decisions/0009-max-adapter-thin-client.md):
-  пока proposed, ждут решения команды. Следом — уведомление админа (send в
-  заданный chat) для формы заявки, редактор ↔ Admin API, песочница custom_code.
+- 2026-07-08 — ратификация ADR [0003](../decisions/0003-flow-engine-blocks-and-sandbox.md)–[0009](../decisions/0009-max-adapter-thin-client.md)
+  (proposed, ждут команды). Следом — уведомление админа (notify), редактор ↔ Admin API, песочница custom_code.
 
 ## Известные проблемы
 
@@ -43,6 +42,7 @@ owner: ""
 |---|---|---|---|
 | Нет IAM: Admin API без аутентификации; token vault — dev-файл (`.secrets/`) | Контур только для доверенной среды разработки | Auth и прод-vault — открытые вопросы active-context; порты позволяют заменить без правки ядра | — |
 | Блок custom_code движком не исполняется | Сценарии с ним не публикуются (BR-006 по CapabilityMatrix v1) | Реализуется своим этапом (песочница ADR-0003) | — |
+| 2026-07-09 — нет answer_callback: спиннер на inline-кнопках TG не гасится (answerCallbackQuery), на MAX не зовётся /answers — порт BotPlatformPort.answer_callback, P1 | — | — | — |
 
 ## Расхождения база↔код
 
@@ -50,11 +50,12 @@ owner: ""
      (или между документами) — НЕ исправляя их молча, см. [../_meta/lifecycle.md](../_meta/lifecycle.md).
      Расхождение устранено (документ или код поправлен) → строку удалить. -->
 
-- 2026-07-08 — канон портов/use case'ов ([../architecture/overview.md](../architecture/overview.md))
-  не содержит порты/use case'ы Admin API/webhook/mini app/http (`BotRepository`,
-  `IdempotencyPort`, `HttpClientPort`, `SecretResolverPort`, mini-app/connection
-  use case'ы, `BotPlatformPort.validate_init_data`) — добавлены кодом; внести в
-  glossary/patterns/overview при ратификации ADR-0008/0009.
+- 2026-07-08 — канон портов/use case'ов ([overview](../architecture/overview.md)) не содержит
+  порты Admin API/webhook/mini app/http (`BotRepository`, `IdempotencyPort`, `HttpClientPort`,
+  `SecretResolverPort`, mini-app/connection UC, `validate_init_data`) — внести при ратификации ADR-0008/0009.
+- 2026-07-09 — `session.variables` (PII формы) — durable в Postgres JSONB
+  (`PgSessionRepository`) без ретеншена/согласия, не «эфемерно в Redis». Нужен
+  ретеншен/эрейзер завершённых сессий + согласие (прод-комплаенс).
 
 ## Технический долг
 

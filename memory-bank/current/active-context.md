@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.17"
-updated: 2026-07-08
+version: "1.19"
+updated: 2026-07-09
 verified_commit: ""
 owner: ""
 ---
@@ -51,6 +51,8 @@ owner: ""
 - 2026-07-08 — Валидация init data mini app (BR-007): общее HMAC-ядро webapp_signature (TG/MAX идентичны, из specs/002), per-platform обёртки, BotPlatformPort.validate_init_data, AuthenticateMiniAppUseCase, эндпоинт POST /api/bots/{id}/miniapp/auth. Гейт: 99 тестов (криптовекторы, срок, подделка, e2e через реальный адаптер) + живой смоук на контейнере (200/401/401).
 - 2026-07-08 — BR-007 mini app auth: общий identity_from_init_data для Telegram/MAX адаптеров; signed init data без пригодного user.id теперь отклоняется, дублирование парсинга MiniAppIdentity снято, BotPlatformPort и границы слоёв не менялись.
 - 2026-07-08 — Лоуп mini app: блок open_mini_app (движок шлёт кнопку запуска web_app/open_app и ждёт), триггер mini_app_result (эндпоинт результата -> движок продолжает сценарий), AttachMiniAppUseCase + эндпоинт привязки. CapabilityMatrix v1 расширена. Гейт: 117 unit, mypy 79, 6/6 контрактов.
+- 2026-07-09 — Запущен frontend/constructor dev server: Vite на http://127.0.0.1:5173/, HTTP 200; для запуска потребовалось выполнение вне sandbox из-за Access denied в esbuild на родительские каталоги Windows-пути.
+- 2026-07-09 — первый бот 'умный помощник по заявкам' собран как Flow-данные (examples/), live-smoke пройден в Telegram (меню/навигация вживую); must-fix остаточной http_request-переменной (null-content → прошлый ответ) починен + регресс-тест
 
 ## Следующие шаги
 

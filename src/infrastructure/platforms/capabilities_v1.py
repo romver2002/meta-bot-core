@@ -1,8 +1,8 @@
 """Матрица возможностей v1 — общая для Telegram и MAX.
 
 Ровно те блоки, что реализованы Flow Engine (BR-006 отсекает остальное при
-публикации). http_request/custom_code добавятся со своими этапами; источник
-различий платформ — platform-reference.md + ADR-0005.
+публикации). custom_code добавится со своим этапом; источник различий
+платформ — platform-reference.md + ADR-0005.
 """
 
 from __future__ import annotations
