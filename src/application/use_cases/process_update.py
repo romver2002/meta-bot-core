@@ -86,8 +86,10 @@ def _extract(payload: dict[str, Any], response_map: object) -> dict[str, object]
     if isinstance(response_map, dict):
         for var, path in response_map.items():
             value = _dig(payload, str(path))
-            if value is not None:
-                result[str(var)] = value
+            # Пишем КАЖДЫЙ ключ детерминированно: отсутствующий путь (или null
+            # в ответе) -> "", иначе остаточная переменная прошлого шага «протекает»
+            # в condition и пользователь видит ответ на прошлый вопрос.
+            result[str(var)] = value if value is not None else ""
     return result
 
 
