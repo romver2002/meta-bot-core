@@ -7,7 +7,6 @@ Greenfield сразу на ``platform-api2.max.ru``; токен — в заго�
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from typing import Any
 
@@ -22,16 +21,7 @@ from domain.flow.value_objects import ButtonAction
 from infrastructure.platforms.capabilities_v1 import ENGINE_V1_CAPABILITIES
 from infrastructure.platforms.max.mini_app_auth import validate_max_init_data
 from infrastructure.platforms.max.webhook import parse_max_update
-
-
-def _identity_from_params(params: Mapping[str, str] | None) -> MiniAppIdentity | None:
-    if params is None:
-        return None
-    try:
-        user = json.loads(params.get("user") or "{}")
-    except json.JSONDecodeError:
-        user = {}
-    return MiniAppIdentity(external_user_id=str(user.get("id", "")), params=params)
+from infrastructure.platforms.mini_app_identity import identity_from_init_data
 
 
 def _keyboard_attachment(buttons: tuple[Button, ...]) -> dict[str, Any] | None:
@@ -68,7 +58,7 @@ class MaxBotAdapter:
         return parse_max_update(bot_id, payload)
 
     def validate_init_data(self, token: str, init_data: str) -> MiniAppIdentity | None:
-        return _identity_from_params(validate_max_init_data(token, init_data, max_age_seconds=self._init_data_max_age))
+        return identity_from_init_data(validate_max_init_data(token, init_data, max_age_seconds=self._init_data_max_age))
 
     async def verify_token(self, token: str) -> bool:
         try:

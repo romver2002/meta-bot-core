@@ -21,12 +21,9 @@ owner: ""
   (6 контрактов), CI [arch-lint](../../.github/workflows/arch-lint.yml) +
   [ci.yml](../../.github/workflows/ci.yml) (ruff/mypy/pytest, coverage ≥90%).
 - 2026-07-06 — реестр ADR: 0001–0002 accepted, 0003–0009 proposed.
-- 2026-07-08 — бэкенд по канону CA (Python 3.14 + uv, PG16+Redis7): domain
-  (Bot/Flow/Session, BR-001/003/006), хранение ADR-0008 (версии Flow, Alembic),
-  Flow Engine, адаптеры Telegram/MAX (ADR-0009), webhook с идемпотентностью,
-  Admin API. Гейт зелёный: ruff · mypy strict · lint-imports 6 контрактов ·
-  81 unit + 4 integration (testcontainers PG16) · e2e золотого пути + живой смоук.
+- 2026-07-08 — бэкенд по канону CA (Python 3.14 + uv, PG16+Redis7): domain (Bot/Flow/Session, BR-001/003/006), хранение ADR-0008, Flow Engine, адаптеры Telegram/MAX, webhook с идемпотентностью, Admin API. Гейт зелёный: ruff · mypy strict · lint-imports 6 контрактов · 81 unit + 4 integration · e2e золотого пути + живой смоук.
 - 2026-07-08 — прототип редактора `frontend/constructor/` (React Flow, ADR-0007).
+- 2026-07-08 — BR-007 mini app auth: Telegram/MAX адаптеры используют общий `mini_app_identity.py`; подписанные init data без доверенного `user.id` отклоняются; регрессия закрыта `tests/unit/platforms/test_mini_app_identity.py`.
 
 ## В работе
 

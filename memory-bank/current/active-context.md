@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.14"
+version: "1.16"
 updated: 2026-07-08
 verified_commit: ""
 owner: ""
@@ -49,6 +49,7 @@ owner: ""
 - 2026-07-08 — Живой контур: адаптеры Telegram/MAX (ADR-0009, тонкий httpx), webhook с идемпотентностью Redis, Admin API (create/flow/publish/get), Flow Engine подключён в composition root. Гейт: 84 теста (в т.ч. e2e золотого пути и живой смоук на PG), mypy 72 файла, 6/6 контрактов
 - 2026-07-08 — Глубокое сравнение TG/MAX (рой, 55 агентов, 594 обращения к докам): отчёт specs/002-platform-deep-dive (38 confirmed/6 uncertain/2 refuted). Исправлено: ключ идемпотентности MaxBotAdapter на mid/callback_id; 2 ошибки в platform-reference (init data HMAC одинаков; у MAX нет платежей) + числа; чек-лист требует-проверки в progress
 - 2026-07-08 — Валидация init data mini app (BR-007): общее HMAC-ядро webapp_signature (TG/MAX идентичны, из specs/002), per-platform обёртки, BotPlatformPort.validate_init_data, AuthenticateMiniAppUseCase, эндпоинт POST /api/bots/{id}/miniapp/auth. Гейт: 99 тестов (криптовекторы, срок, подделка, e2e через реальный адаптер) + живой смоук на контейнере (200/401/401).
+- 2026-07-08 — BR-007 mini app auth: общий identity_from_init_data для Telegram/MAX адаптеров; signed init data без пригодного user.id теперь отклоняется, дублирование парсинга MiniAppIdentity снято, BotPlatformPort и границы слоёв не менялись.
 
 ## Следующие шаги
 
