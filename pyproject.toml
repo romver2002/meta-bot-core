@@ -52,7 +52,9 @@ only-include = [
 src = ""
 
 [tool.uv]
-cache-dir = ".uv-cache"
+# Кеш uv — в общем кеше пользователя (дефолт uv), не в корне проекта: не засоряет
+# дерево и переиспользуется между проектами. В Docker путь задаёт UV_CACHE_DIR
+# (см. Dockerfile) и cache-mount BuildKit — эта настройка на сборку не влияет.
 managed = true
 python-preference = "only-managed"
 

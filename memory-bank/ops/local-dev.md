@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.1"
-updated: 2026-07-08
+version: "1.2"
+updated: 2026-07-09
 verified_commit: ""
 owner: ""
 ---
@@ -106,6 +106,23 @@ python scripts/validate_memory_bank.py      # валидность базы зн
 - `pytest -m integration` требует Docker (testcontainers: Postgres 16, Redis 7);
   уровни и пороги покрытия — [../architecture/testing-strategy.md](../architecture/testing-strategy.md).
 - Правил memory-bank не касался — `validate_memory_bank.py` можно пропустить.
+
+## Очистка локальных артефактов
+
+Инструменты складывают кеши в корень (`.mypy_cache`, `.ruff_cache`, `.pytest_cache`,
+`.import_linter_cache`, `.uv-cache`, `__pycache__`, `*.egg-info`, `.coverage`). В git
+и Docker они не входят (`.gitignore`, `.dockerignore`) и скрыты из дерева VSCode
+(`.vscode/settings.json`). Сбросить их с диска — одной командой:
+
+```bash
+python scripts/clean.py            # кеши сборки/тестов/линтеров + __pycache__ + dist
+python scripts/clean.py --deep     # плюс координационный кеш ruflo (.swarm, ruvector.db)
+python scripts/clean.py --dry-run  # показать, что удалит, ничего не трогая
+```
+
+Рабочее окружение (`.venv/`, `node_modules/`) и секреты (`.env`) скрипт не трогает —
+всё удаляемое пересоздаётся инструментами. Кеш uv держится в общем кеше пользователя,
+а не в проекте (`[tool.uv]` в `pyproject.toml` без `cache-dir`).
 
 ## Как проверить, что всё поднялось
 

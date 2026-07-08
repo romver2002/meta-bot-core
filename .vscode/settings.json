@@ -1,0 +1,44 @@
+{
+  // Прячем из Проводника регенерируемый кеш и рабочее окружение, чтобы дерево
+  // не засорялось (файлы остаются на диске, в git не входят — .gitignore).
+  // Легитимные dot-файлы (.env.example, .gitignore, .importlinter, .python-version,
+  // .dockerignore) НЕ прячем — они конфиг, их правят руками.
+  // Очистить артефакты с диска: python scripts/clean.py
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.egg-info": true,
+    "**/*.pyc": true,
+    ".mypy_cache": true,
+    ".ruff_cache": true,
+    ".pytest_cache": true,
+    ".import_linter_cache": true,
+    ".uv-cache": true,
+    ".coverage": true,
+    "htmlcov": true,
+    "**/dist": true,
+    ".venv": true,
+    "**/node_modules": true,
+    ".swarm": true,
+    ".claude-flow": true,
+    ".hive-mind": true,
+    "ruvector.db": true
+  },
+  // Не сканируем тяжёлые каталоги при поиске (Ctrl+Shift+F).
+  "search.exclude": {
+    "**/.venv": true,
+    "**/node_modules": true,
+    "**/.mypy_cache": true,
+    "**/.uv-cache": true,
+    "**/Templater": true,
+    "**/uv.lock": true
+  },
+  // Снимаем нагрузку с файлового вотчера — меньше CPU и «дрожания» дерева.
+  "files.watcherExclude": {
+    "**/.venv/**": true,
+    "**/node_modules/**": true,
+    "**/.mypy_cache/**": true,
+    "**/.ruff_cache/**": true,
+    "**/.uv-cache/**": true,
+    "**/__pycache__/**": true
+  }
+}
