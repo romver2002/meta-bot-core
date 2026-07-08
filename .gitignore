@@ -22,6 +22,7 @@ dist/
 .env
 .env.*
 !.env.example
+.secrets/
 
 # локальная векторная память ruflo (артефакт роя, не источник истины)
 ruvector.db

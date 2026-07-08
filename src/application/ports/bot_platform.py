@@ -9,10 +9,12 @@
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Mapping
 from typing import Protocol
 
 from domain.bot.value_objects import Platform
 from domain.capabilities import CapabilityMatrix
+from domain.events import IncomingEvent
 from domain.flow.entities import Button
 
 
@@ -47,6 +49,13 @@ class BotPlatformPort(Protocol):
 
         :raises ApplicationError: реализация оборачивает сетевые сбои
             в свои ошибки; доменных ошибок здесь не бывает.
+        """
+        ...
+
+    def parse_update(self, bot_id: str, payload: Mapping[str, object]) -> IncomingEvent | None:
+        """Нормализует сырой update платформы в IncomingEvent (ADR-0004).
+
+        None — событие не поддерживается конструктором (молча игнорируется).
         """
         ...
 

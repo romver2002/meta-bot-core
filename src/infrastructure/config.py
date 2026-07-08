@@ -21,3 +21,6 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     session_idle_ttl: int = 3600
     webhook_idempotency_ttl: int = 86400
+    webhook_secret: str | None = None  # сверяется с X-*-Secret заголовком платформы
+    # Путь к файлу dev-vault (не секрет); прод-хранилище — открытый вопрос.
+    token_vault_file: str = ".secrets/token-vault.json"  # noqa: S105
