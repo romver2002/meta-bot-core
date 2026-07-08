@@ -1,6 +1,8 @@
 .git/
+.github/
 .venv/
 venv/
+.uv-cache/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -11,8 +13,14 @@ dist/
 node_modules/
 frontend/
 memory-bank/
+specs/
+scripts/
 Templater/
 tests/
+.swarm/
+.claude-flow/
+.hive-mind/
+ruvector.db
 .env
 .env.*
 !.env.example

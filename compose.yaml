@@ -30,12 +30,15 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-    env_file:
-      - .env
+    # env_file намеренно не используется: локальный Docker Compose старых версий
+    # не умеет optional-синтаксис, а обязательный .env ломает свежий клон.
+    # Переменные приходят из environment (дефолты) и хостового окружения/.env
+    # через интерполяцию ${...}.
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-metabot}:${POSTGRES_PASSWORD:-metabot}@postgres:5432/${POSTGRES_DB:-metabot}
       REDIS_URL: redis://redis:6379/0
-    command: uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    # Миграции применяются на старте: контур запуска всегда даёт актуальную схему.
+    command: sh -c "uv run alembic upgrade head && uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
     depends_on:
       postgres:
         condition: service_healthy
@@ -44,8 +47,7 @@ services:
     networks:
       - dev
     volumes:
-      - ./src:/app/src
-      - /app/.venv
+      - ./src:/app/src  # live-reload; .venv образа bind'ом не перекрывается
 
   postgres:
     image: postgres:16-alpine
@@ -56,7 +58,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-metabot}
       POSTGRES_DB: ${POSTGRES_DB:-metabot}
     ports:
-      - "5433:5432"  # 5432 на хосте занят соседним проектом; внутри сети — 5432
+      - "127.0.0.1:5433:5432"  # только loopback; 5432 хоста занят соседним проектом
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -72,7 +74,7 @@ services:
     container_name: meta-bot-core-redis
     restart: on-failure
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"  # только loopback: в Redis живёт FSM с ПДн (ADR-0008)
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
