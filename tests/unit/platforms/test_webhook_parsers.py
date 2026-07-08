@@ -61,19 +61,25 @@ def test_max_bot_started() -> None:
     assert event is not None
     assert (event.platform, event.event_type) == (Platform.MAX, TriggerType.START)
     assert (event.external_user_id, event.external_chat_id) == ("5", "55")
-    assert event.update_id == "bot_started:1000"
+    # Нет per-update id → составной ключ идемпотентности.
+    assert event.update_id == "bot_started:1000:5"
 
 
-def test_max_message_created_and_start() -> None:
+def test_max_message_uses_mid_as_idempotency_key() -> None:
     payload = {
         "update_type": "message_created",
         "timestamp": 2000,
-        "message": {"sender": {"user_id": 5}, "recipient": {"chat_id": 55}, "body": {"text": "меню"}},
+        "message": {
+            "sender": {"user_id": 5},
+            "recipient": {"chat_id": 55},
+            "body": {"mid": "mid-abc", "text": "меню"},
+        },
     }
     event = parse_max_update(BOT, payload)
     assert event is not None
     assert event.event_type is TriggerType.TEXT
     assert event.text == "меню"
+    assert event.update_id == "mid-abc"  # стабилен между ретраями доставки
 
     payload["message"]["body"]["text"] = "/start"  # type: ignore[index]
     started = parse_max_update(BOT, payload)
@@ -81,19 +87,33 @@ def test_max_message_created_and_start() -> None:
     assert started.event_type is TriggerType.START
 
 
-def test_max_callback() -> None:
+def test_max_message_without_mid_falls_back_to_composite() -> None:
+    event = parse_max_update(
+        BOT,
+        {
+            "update_type": "message_created",
+            "timestamp": 2001,
+            "message": {"sender": {"user_id": 7}, "recipient": {"chat_id": 70}, "body": {"text": "hi"}},
+        },
+    )
+    assert event is not None
+    assert event.update_id == "message_created:2001:7"
+
+
+def test_max_callback_uses_callback_id() -> None:
     event = parse_max_update(
         BOT,
         {
             "update_type": "message_callback",
             "timestamp": 3000,
-            "callback": {"payload": "finish", "user": {"user_id": 5}},
+            "callback": {"callback_id": "cb-xyz", "payload": "finish", "user": {"user_id": 5}},
             "message": {"recipient": {"chat_id": 55}},
         },
     )
     assert event is not None
     assert event.event_type is TriggerType.CALLBACK
     assert event.payload == "finish"
+    assert event.update_id == "cb-xyz"
 
 
 def test_max_unsupported_update_ignored() -> None:
