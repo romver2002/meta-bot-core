@@ -15,7 +15,9 @@ from application.errors import (
     BotNotFoundError,
     ConcurrencyError,
     FlowNotFoundError,
+    MiniAppAuthError,
 )
+from application.use_cases.authenticate_mini_app import AuthenticateMiniAppUseCase
 from application.use_cases.create_bot import CreateBotUseCase
 from application.use_cases.get_bot import GetBotUseCase
 from application.use_cases.publish_bot import PublishBotUseCase
@@ -23,6 +25,7 @@ from application.use_cases.save_flow_draft import SaveFlowDraftUseCase
 from domain.bot.value_objects import Platform
 from domain.errors import BotPublicationError, FlowIntegrityError, FlowValidationError
 from presentation.providers.admin import (
+    get_authenticate_mini_app_uc,
     get_create_bot_uc,
     get_get_bot_uc,
     get_publish_bot_uc,
@@ -31,6 +34,8 @@ from presentation.providers.admin import (
 from presentation.schemas.admin import (
     BotResponse,
     CreateBotRequest,
+    MiniAppAuthRequest,
+    MiniAppAuthResponse,
     PublishResponse,
     SaveFlowRequest,
     SaveFlowResponse,
@@ -103,3 +108,18 @@ async def publish_bot(
     except (FlowValidationError, BotPublicationError) as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     return PublishResponse(bot=BotResponse.from_domain(bot))
+
+
+@admin.post("/bots/{bot_id}/miniapp/auth", summary="Валидация init data mini app (BR-007)")
+async def authenticate_mini_app(
+    bot_id: str,
+    request: MiniAppAuthRequest,
+    use_case: Annotated[AuthenticateMiniAppUseCase, Depends(get_authenticate_mini_app_uc)],
+) -> MiniAppAuthResponse:
+    try:
+        identity = await use_case.execute(bot_id, request.init_data)
+    except BotNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except MiniAppAuthError as exc:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    return MiniAppAuthResponse(external_user_id=identity.external_user_id)

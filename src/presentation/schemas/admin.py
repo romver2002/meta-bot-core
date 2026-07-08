@@ -53,3 +53,11 @@ class SaveFlowResponse(BaseModel):
 
 class PublishResponse(BaseModel):
     bot: BotResponse
+
+
+class MiniAppAuthRequest(BaseModel):
+    init_data: str = Field(min_length=1, description="Сырое window.*.WebApp.initData (BR-007)")
+
+
+class MiniAppAuthResponse(BaseModel):
+    external_user_id: str

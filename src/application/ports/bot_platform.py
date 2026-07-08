@@ -33,6 +33,14 @@ class SendMessageCommand:
     buttons: tuple[Button, ...] = ()
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class MiniAppIdentity:
+    """Доверенная личность пользователя mini app после валидации init data (BR-007)."""
+
+    external_user_id: str
+    params: Mapping[str, str]
+
+
 class BotPlatformPort(Protocol):
     """Порт мессенджера: всё, что ядру нужно от платформы бота."""
 
@@ -56,6 +64,14 @@ class BotPlatformPort(Protocol):
         """Нормализует сырой update платформы в IncomingEvent (ADR-0004).
 
         None — событие не поддерживается конструктором (молча игнорируется).
+        """
+        ...
+
+    def validate_init_data(self, token: str, init_data: str) -> MiniAppIdentity | None:
+        """Валидирует init data mini app на backend (BR-007).
+
+        None — подпись неверна или данные устарели; чистая CPU-проверка (HMAC),
+        без сети. Токен и init data не логируются.
         """
         ...
 

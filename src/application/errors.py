@@ -23,3 +23,7 @@ class ConcurrencyError(ApplicationError):
 
 class FlowExecutionError(ApplicationError):
     """Сбой исполнения сценария движком (неподдерживаемый блок, цикл)."""
+
+
+class MiniAppAuthError(ApplicationError):
+    """Init data mini app не прошла валидацию на backend (BR-007)."""

@@ -17,6 +17,7 @@ from fastapi import FastAPI
 
 from application.system.use_cases.get_healthcheck import GetHealthcheckUseCase, get_app_version
 from application.system.use_cases.get_services_healthcheck import GetServicesHealthcheckUseCase
+from application.use_cases.authenticate_mini_app import AuthenticateMiniAppUseCase
 from application.use_cases.create_bot import CreateBotUseCase
 from application.use_cases.get_bot import GetBotUseCase
 from application.use_cases.process_update import ProcessUpdateUseCase
@@ -39,6 +40,7 @@ from presentation.api.admin_routes import admin
 from presentation.api.health_routes import health
 from presentation.api.webhook_routes import webhooks
 from presentation.providers.admin import (
+    get_authenticate_mini_app_uc,
     get_create_bot_uc,
     get_get_bot_uc,
     get_publish_bot_uc,
@@ -107,6 +109,9 @@ def create_app() -> FastAPI:
         get_create_bot_uc: lambda: CreateBotUseCase(bots=bots, token_vault=token_vault),
         get_get_bot_uc: lambda: GetBotUseCase(bots=bots),
         get_save_flow_draft_uc: lambda: SaveFlowDraftUseCase(bots=bots, flows=flows),
+        get_authenticate_mini_app_uc: lambda: AuthenticateMiniAppUseCase(
+            bots=bots, token_vault=token_vault, platform_factory=platform_factory
+        ),
         get_publish_bot_uc: lambda: PublishBotUseCase(
             bots=bots, flows=flows, token_vault=token_vault, platform_factory=platform_factory
         ),
