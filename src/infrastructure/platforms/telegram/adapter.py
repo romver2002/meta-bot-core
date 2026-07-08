@@ -27,10 +27,12 @@ def _keyboard(buttons: tuple[Button, ...]) -> dict[str, Any] | None:
     """Доменные кнопки -> inline-клавиатура Telegram (по кнопке в строке)."""
     if not buttons:
         return None
-    rows: list[list[dict[str, str]]] = []
+    rows: list[list[dict[str, Any]]] = []
     for button in buttons:
         if button.action is ButtonAction.URL:
             rows.append([{"text": button.label, "url": button.target or ""}])
+        elif button.action is ButtonAction.OPEN_MINI_APP:
+            rows.append([{"text": button.label, "web_app": {"url": button.target or ""}}])
         else:  # next и callback: payload = target (движок маршрутизирует)
             rows.append([{"text": button.label, "callback_data": button.target or ""}])
     return {"inline_keyboard": rows}

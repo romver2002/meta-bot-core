@@ -17,12 +17,14 @@ from fastapi import FastAPI
 
 from application.system.use_cases.get_healthcheck import GetHealthcheckUseCase, get_app_version
 from application.system.use_cases.get_services_healthcheck import GetServicesHealthcheckUseCase
+from application.use_cases.attach_mini_app import AttachMiniAppUseCase
 from application.use_cases.authenticate_mini_app import AuthenticateMiniAppUseCase
 from application.use_cases.create_bot import CreateBotUseCase
 from application.use_cases.get_bot import GetBotUseCase
 from application.use_cases.process_update import ProcessUpdateUseCase
 from application.use_cases.publish_bot import PublishBotUseCase
 from application.use_cases.save_flow_draft import SaveFlowDraftUseCase
+from application.use_cases.submit_mini_app_result import SubmitMiniAppResultUseCase
 from domain.bot.value_objects import Platform
 from infrastructure.cache.redis_idempotency import RedisIdempotency
 from infrastructure.config import Settings
@@ -40,11 +42,13 @@ from presentation.api.admin_routes import admin
 from presentation.api.health_routes import health
 from presentation.api.webhook_routes import webhooks
 from presentation.providers.admin import (
+    get_attach_mini_app_uc,
     get_authenticate_mini_app_uc,
     get_create_bot_uc,
     get_get_bot_uc,
     get_publish_bot_uc,
     get_save_flow_draft_uc,
+    get_submit_mini_app_result_uc,
 )
 from presentation.providers.system import get_healthcheck_uc, get_services_healthcheck_uc
 from presentation.providers.webhooks import (
@@ -83,6 +87,13 @@ def create_app() -> FastAPI:
         }
     )
     idempotency = RedisIdempotency.from_settings(settings)
+    process_update = ProcessUpdateUseCase(
+        bots=bots,
+        flows=flows,
+        sessions=sessions,
+        token_vault=token_vault,
+        platform_factory=platform_factory,
+    )
 
     app = FastAPI(
         title="meta-bot-core",
@@ -112,18 +123,19 @@ def create_app() -> FastAPI:
         get_authenticate_mini_app_uc: lambda: AuthenticateMiniAppUseCase(
             bots=bots, token_vault=token_vault, platform_factory=platform_factory
         ),
+        get_attach_mini_app_uc: lambda: AttachMiniAppUseCase(bots=bots),
+        get_submit_mini_app_result_uc: lambda: SubmitMiniAppResultUseCase(
+            bots=bots,
+            token_vault=token_vault,
+            platform_factory=platform_factory,
+            process_update=process_update,
+        ),
         get_publish_bot_uc: lambda: PublishBotUseCase(
             bots=bots, flows=flows, token_vault=token_vault, platform_factory=platform_factory
         ),
         get_platform_factory: lambda: platform_factory,
         get_idempotency: lambda: idempotency,
-        get_process_update_uc: lambda: ProcessUpdateUseCase(
-            bots=bots,
-            flows=flows,
-            sessions=sessions,
-            token_vault=token_vault,
-            platform_factory=platform_factory,
-        ),
+        get_process_update_uc: lambda: process_update,
     }
     app.dependency_overrides.update(overrides)
     return app

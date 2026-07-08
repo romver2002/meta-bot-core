@@ -7,15 +7,18 @@ webhook-роуте), находит бота и его опубликованн�
 Правила маршрутизации события:
 1. callback: сначала кнопки текущего узла (action=next), затем callback-триггеры;
 2. text при ожидающей сессии (блок ask) — потребляется как ответ;
-3. иначе — матчинг входных триггеров; нераспознанное событие игнорируется.
+3. mini_app_result при сессии на узле open_mini_app — результат mini app,
+   продолжаем сценарий; иначе — matching mini_app_result-триггеров;
+4. иначе — матчинг входных триггеров; нераспознанное событие игнорируется.
 
-Поддерживаемые блоки v1: send_message, show_buttons, ask, condition, save.
-Остальные типы отклоняются при публикации CapabilityMatrix адаптеров (BR-006);
-здесь — защита в глубину через FlowExecutionError.
+Поддерживаемые блоки v1: send_message, show_buttons, ask, condition, save,
+open_mini_app. Остальные типы отклоняются при публикации CapabilityMatrix
+адаптеров (BR-006); здесь — защита в глубину через FlowExecutionError.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import uuid
 from collections.abc import Awaitable, Callable
 
@@ -36,6 +39,13 @@ from domain.session.entities import Session
 MAX_STEPS = 64
 
 _Send = Callable[[str, tuple[Button, ...]], Awaitable[None]]
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _Route:
+    """Событие распознано; ``start_node_id=None`` — цепочка уже завершена."""
+
+    start_node_id: str | None
 
 
 class ProcessUpdateUseCase:
@@ -68,6 +78,7 @@ class ProcessUpdateUseCase:
         if version is None:
             raise FlowNotFoundError(f"Опубликованная версия {bot.published_flow_version_id!r} не найдена")
         flow = version.flow
+        mini_app_url = bot.mini_app.url if bot.mini_app is not None else None
 
         session = await self._sessions.get_active(bot.id, event.external_user_id)
         if session is None:
@@ -91,11 +102,11 @@ class ProcessUpdateUseCase:
                 )
             )
 
-        start_node_id = self._route(flow, session, event)
-        if start_node_id is None:
+        route = self._route(flow, session, event)
+        if route is None:
             return  # нераспознанное событие — сценарий не трогаем
 
-        chain_ended = await self._run_chain(flow, start_node_id, session, send)
+        chain_ended = await self._run_chain(flow, route.start_node_id, session, send, mini_app_url)
         if chain_ended:
             # Сценарий дошёл до конца: пара (Bot, user) свободна, следующий
             # триггер начнёт новую сессию на актуальной версии (ADR-0008).
@@ -104,17 +115,22 @@ class ProcessUpdateUseCase:
 
     # ── маршрутизация события ────────────────────────────────────────────────
 
-    def _route(self, flow: Flow, session: Session, event: IncomingEvent) -> str | None:
+    def _route(self, flow: Flow, session: Session, event: IncomingEvent) -> _Route | None:
         if event.event_type is TriggerType.CALLBACK:
-            button_target = self._button_target(flow, session, event.payload)
-            if button_target is not None:
-                return button_target
+            target = self._button_target(flow, session, event.payload)
+            if target is not None:
+                return _Route(target)
         elif event.event_type is TriggerType.TEXT and session.awaiting_variable is not None and event.text is not None:
             session.submit_answer(event.text)
-            return self._transition_target(flow, session.current_node_id, "next")
+            return _Route(self._transition_target(flow, session.current_node_id, "next"))
+        elif event.event_type is TriggerType.MINI_APP_RESULT:
+            node = flow.nodes.get(session.current_node_id) if session.current_node_id else None
+            if node is not None and node.type is NodeType.OPEN_MINI_APP:
+                session.remember(str(node.params.get("save_as", "mini_app_result")), event.payload or "")
+                return _Route(self._transition_target(flow, node.id, "next"))
 
         trigger = self._match_trigger(flow, event)
-        return trigger.target_node_id if trigger is not None else None
+        return _Route(trigger.target_node_id) if trigger is not None else None
 
     @staticmethod
     def _button_target(flow: Flow, session: Session, payload: str | None) -> str | None:
@@ -147,9 +163,16 @@ class ProcessUpdateUseCase:
 
     # ── исполнение цепочки блоков ────────────────────────────────────────────
 
-    async def _run_chain(self, flow: Flow, start_node_id: str, session: Session, send: _Send) -> bool:
+    async def _run_chain(
+        self,
+        flow: Flow,
+        start_node_id: str | None,
+        session: Session,
+        send: _Send,
+        mini_app_url: str | None,
+    ) -> bool:
         """Исполняет цепочку узлов; True — сценарий дошёл до конца (нет ожидания)."""
-        node_id: str | None = start_node_id
+        node_id = start_node_id
         for _ in range(MAX_STEPS):
             if node_id is None:
                 return True  # цепочка закончилась
@@ -171,6 +194,15 @@ class ProcessUpdateUseCase:
                 await send(render_text(str(node.params.get("prompt", "")), session.variables), ())
                 session.await_answer(str(node.params.get("save_as", "")))
                 return False  # ждём ответ пользователя
+            elif node.type is NodeType.OPEN_MINI_APP:
+                if mini_app_url is None:
+                    raise FlowExecutionError(f"Боту не привязан mini app для блока {node.id!r}")
+                label = str(node.params.get("button_text", "")) or "Открыть"
+                await send(
+                    render_text(str(node.params.get("text", "")), session.variables),
+                    (Button(label=label, action=ButtonAction.OPEN_MINI_APP, target=mini_app_url),),
+                )
+                return False  # ждём результат mini app (mini_app_result)
             elif node.type is NodeType.CONDITION:
                 outcome = evaluate_condition(str(node.params.get("expression", "")), session.variables)
                 node_id = self._transition_target(flow, node.id, "true" if outcome else "false")

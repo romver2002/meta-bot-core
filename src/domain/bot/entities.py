@@ -64,6 +64,12 @@ class Bot:
     def assign_flow(self, flow_id: str) -> None:
         self.flow_id = flow_id
 
+    def attach_mini_app(self, mini_app: MiniApp) -> None:
+        """Привязывает mini app к боту (BR-003; HTTPS-инвариант — в MiniApp)."""
+        if mini_app.bot_id != self.id:
+            raise BotInvariantError("MiniApp привязывается только к своему боту")
+        self.mini_app = mini_app
+
     def publish(self, flow: Flow, *, token_is_valid: bool) -> None:
         """Публикует бота.
 

@@ -61,3 +61,13 @@ class MiniAppAuthRequest(BaseModel):
 
 class MiniAppAuthResponse(BaseModel):
     external_user_id: str
+
+
+class AttachMiniAppRequest(BaseModel):
+    url: str = Field(min_length=1, description="HTTPS-URL mini app (BR-003)")
+    title: str = ""
+
+
+class MiniAppResultRequest(BaseModel):
+    init_data: str = Field(min_length=1)
+    result: dict[str, Any] = Field(default_factory=dict)

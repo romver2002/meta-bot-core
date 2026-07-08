@@ -17,25 +17,36 @@ from application.errors import (
     FlowNotFoundError,
     MiniAppAuthError,
 )
+from application.use_cases.attach_mini_app import AttachMiniAppUseCase
 from application.use_cases.authenticate_mini_app import AuthenticateMiniAppUseCase
 from application.use_cases.create_bot import CreateBotUseCase
 from application.use_cases.get_bot import GetBotUseCase
 from application.use_cases.publish_bot import PublishBotUseCase
 from application.use_cases.save_flow_draft import SaveFlowDraftUseCase
+from application.use_cases.submit_mini_app_result import SubmitMiniAppResultUseCase
 from domain.bot.value_objects import Platform
-from domain.errors import BotPublicationError, FlowIntegrityError, FlowValidationError
+from domain.errors import (
+    BotPublicationError,
+    FlowIntegrityError,
+    FlowValidationError,
+    MiniAppInvariantError,
+)
 from presentation.providers.admin import (
+    get_attach_mini_app_uc,
     get_authenticate_mini_app_uc,
     get_create_bot_uc,
     get_get_bot_uc,
     get_publish_bot_uc,
     get_save_flow_draft_uc,
+    get_submit_mini_app_result_uc,
 )
 from presentation.schemas.admin import (
+    AttachMiniAppRequest,
     BotResponse,
     CreateBotRequest,
     MiniAppAuthRequest,
     MiniAppAuthResponse,
+    MiniAppResultRequest,
     PublishResponse,
     SaveFlowRequest,
     SaveFlowResponse,
@@ -123,3 +134,33 @@ async def authenticate_mini_app(
     except MiniAppAuthError as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
     return MiniAppAuthResponse(external_user_id=identity.external_user_id)
+
+
+@admin.put("/bots/{bot_id}/miniapp", summary="Привязать mini app к боту (BR-003)")
+async def attach_mini_app(
+    bot_id: str,
+    request: AttachMiniAppRequest,
+    use_case: Annotated[AttachMiniAppUseCase, Depends(get_attach_mini_app_uc)],
+) -> BotResponse:
+    try:
+        bot = await use_case.execute(bot_id, request.url, title=request.title)
+    except BotNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except MiniAppInvariantError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return BotResponse.from_domain(bot)
+
+
+@admin.post("/bots/{bot_id}/miniapp/result", summary="Результат mini app -> сценарий (mini_app_result)")
+async def submit_mini_app_result(
+    bot_id: str,
+    request: MiniAppResultRequest,
+    use_case: Annotated[SubmitMiniAppResultUseCase, Depends(get_submit_mini_app_result_uc)],
+) -> dict[str, bool]:
+    try:
+        await use_case.execute(bot_id, request.init_data, request.result)
+    except BotNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except MiniAppAuthError as exc:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    return {"ok": True}

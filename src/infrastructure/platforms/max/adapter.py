@@ -28,10 +28,14 @@ def _keyboard_attachment(buttons: tuple[Button, ...]) -> dict[str, Any] | None:
     """Доменные кнопки -> inline_keyboard-attachment MAX (по кнопке в строке)."""
     if not buttons:
         return None
-    rows: list[list[dict[str, str]]] = []
+    rows: list[list[dict[str, Any]]] = []
     for button in buttons:
         if button.action is ButtonAction.URL:
             rows.append([{"type": "link", "text": button.label, "url": button.target or ""}])
+        elif button.action is ButtonAction.OPEN_MINI_APP:
+            # open_app-кнопка MAX; точная схема поля URL — в списке «требует проверки»
+            # (specs/002-platform-deep-dive §6) перед релизом MAX.
+            rows.append([{"type": "open_app", "text": button.label, "web_app": {"url": button.target or ""}}])
         else:  # next и callback: payload = target (движок маршрутизирует)
             rows.append([{"type": "callback", "text": button.label, "payload": button.target or ""}])
     return {"type": "inline_keyboard", "payload": {"buttons": rows}}
@@ -58,7 +62,9 @@ class MaxBotAdapter:
         return parse_max_update(bot_id, payload)
 
     def validate_init_data(self, token: str, init_data: str) -> MiniAppIdentity | None:
-        return identity_from_init_data(validate_max_init_data(token, init_data, max_age_seconds=self._init_data_max_age))
+        return identity_from_init_data(
+            validate_max_init_data(token, init_data, max_age_seconds=self._init_data_max_age)
+        )
 
     async def verify_token(self, token: str) -> bool:
         try:

@@ -11,13 +11,14 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
+from application.use_cases.attach_mini_app import AttachMiniAppUseCase
 from application.use_cases.authenticate_mini_app import AuthenticateMiniAppUseCase
 from domain.bot.entities import Bot
 from domain.bot.value_objects import Platform, Token
 from infrastructure.platforms.factory import RegistryPlatformFactory
 from infrastructure.platforms.telegram.adapter import TelegramBotAdapter
 from presentation.api.admin_routes import admin
-from presentation.providers.admin import get_authenticate_mini_app_uc
+from presentation.providers.admin import get_attach_mini_app_uc, get_authenticate_mini_app_uc
 from tests.unit.application.fakes import InMemoryBotRepository, InMemoryTokenVault
 
 pytestmark = pytest.mark.unit
@@ -48,6 +49,7 @@ async def _build_app() -> FastAPI:
     app.dependency_overrides[get_authenticate_mini_app_uc] = lambda: AuthenticateMiniAppUseCase(
         bots=bots, token_vault=vault, platform_factory=factory
     )
+    app.dependency_overrides[get_attach_mini_app_uc] = lambda: AttachMiniAppUseCase(bots=bots)
     return app
 
 
@@ -78,3 +80,20 @@ async def test_wrong_token_signature_is_401() -> None:
     async with _client(app) as client:
         response = await client.post("/api/bots/bot-1/miniapp/auth", json={"init_data": init_data})
     assert response.status_code == 401
+
+
+async def test_attach_mini_app_https_ok() -> None:
+    app = await _build_app()
+    async with _client(app) as client:
+        response = await client.put(
+            "/api/bots/bot-1/miniapp", json={"url": "https://shop.example.com", "title": "Витрина"}
+        )
+    assert response.status_code == 200
+    assert response.json()["id"] == "bot-1"
+
+
+async def test_attach_mini_app_non_https_is_422() -> None:
+    app = await _build_app()
+    async with _client(app) as client:
+        response = await client.put("/api/bots/bot-1/miniapp", json={"url": "http://insecure.example.com"})
+    assert response.status_code == 422
