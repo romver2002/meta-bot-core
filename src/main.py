@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI
 
-from application.system.use_cases.get_healthcheck import GetHealthcheckUseCase
+from application.system.use_cases.get_healthcheck import GetHealthcheckUseCase, get_app_version
 from application.system.use_cases.get_services_healthcheck import GetServicesHealthcheckUseCase
 from infrastructure.config import Settings
 from infrastructure.integrations.health_checks import (
@@ -38,6 +38,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="meta-bot-core",
         description="Доменное ядро конструктора сценариев чат-ботов и mini app (Telegram, MAX)",
+        version=get_app_version("meta-bot-core"),
         lifespan=lifespan,
     )
     app.include_router(health, prefix="/healthchecks", tags=["Состояние"])

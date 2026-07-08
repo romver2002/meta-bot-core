@@ -27,7 +27,7 @@ async def _prepared_use_case(
     bot = make_bot()
     bot.token = type(bot.token)(vault_ref=await vault.store(bot.id, "fake-token"))
     await bots.save(bot)
-    await flows.save_draft(make_flow())
+    await flows.save_draft(make_flow(), expected_row_version=None)
     factory = StubPlatformFactory(platform_port)
     return (
         PublishBotUseCase(bots=bots, flows=flows, token_vault=vault, platform_factory=factory),

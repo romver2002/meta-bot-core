@@ -1,7 +1,8 @@
 """Pg-реализации портов хранения (ADR-0008): PgBotRepository, PgFlowRepository, PgSessionRepository.
 
 Граница агрегата = граница транзакции: каждый метод — одна транзакция.
-Доменные объекты пересекают границу, ORM-модели — никогда.
+Доменные объекты пересекают границу, ORM-модели — никогда. Тексты ошибок
+не содержат ПДн (external_user_id) и секретов (architecture/security.md).
 """
 
 from __future__ import annotations
@@ -14,10 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
 from application.errors import ConcurrencyError, FlowNotFoundError
+from application.ports.flow_repository import FlowDraft
 from domain.bot.entities import Bot
 from domain.flow.entities import Flow
 from domain.flow.version import FlowVersion, FlowVersionStatus
-from domain.session.entities import Session
+from domain.session.entities import Session, SessionStatus
 from infrastructure.db import mappers
 from infrastructure.db.models import (
     BotModel,
@@ -26,7 +28,6 @@ from infrastructure.db.models import (
     PublishAction,
     PublishAuditModel,
     SessionModel,
-    SessionStatus,
 )
 
 
@@ -42,8 +43,16 @@ class PgBotRepository:
             return mappers.model_to_bot(model) if model is not None else None
 
     async def save(self, bot: Bot) -> None:
+        # Строка блокируется на время транзакции (FOR UPDATE) — read-modify-write
+        # внутри save атомарен. Optimistic lock между get() и save() —
+        # зафиксированный долг до появления конкурентных админ-сценариев (IAM).
         async with self._session_factory() as db, db.begin():
-            model = await db.get(BotModel, uuid.UUID(bot.id), options=[selectinload(BotModel.mini_app)])
+            model = await db.get(
+                BotModel,
+                uuid.UUID(bot.id),
+                options=[selectinload(BotModel.mini_app)],
+                with_for_update=True,
+            )
             if model is None:
                 db.add(mappers.bot_to_model(bot))
             else:
@@ -57,7 +66,7 @@ class PgFlowRepository:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
-    async def get_draft(self, flow_id: str) -> Flow | None:
+    async def get_draft(self, flow_id: str) -> FlowDraft | None:
         async with self._session_factory() as db:
             result = await db.execute(
                 sa.select(FlowModel, FlowVersionModel)
@@ -68,65 +77,103 @@ class PgFlowRepository:
             if pair is None:
                 return None
             flow_model, draft = pair
-            return mappers.definition_to_flow(flow_id, flow_model.name, draft.definition)
+            return FlowDraft(
+                flow=mappers.definition_to_flow(flow_id, flow_model.name, draft.definition),
+                row_version=draft.row_version,
+            )
 
-    async def save_draft(self, flow: Flow, *, expected_row_version: int | None = None) -> int:
+    async def save_draft(self, flow: Flow, *, expected_row_version: int | None) -> int:
         definition = mappers.flow_to_definition(flow)
         digest = mappers.definition_hash(definition)
-        async with self._session_factory() as db, db.begin():
-            flow_uuid = uuid.UUID(flow.id)
-            flow_model = await db.get(FlowModel, flow_uuid, with_for_update=True)
-            if flow_model is None:
-                flow_model = FlowModel(id=flow_uuid, name=flow.name)
-                db.add(flow_model)
-            else:
-                flow_model.name = flow.name
+        try:
+            async with self._session_factory() as db, db.begin():
+                flow_uuid = uuid.UUID(flow.id)
+                flow_model = await db.get(FlowModel, flow_uuid, with_for_update=True)
+                if flow_model is None:
+                    flow_model = FlowModel(id=flow_uuid, name=flow.name)
+                    db.add(flow_model)
+                else:
+                    flow_model.name = flow.name
 
-            draft: FlowVersionModel | None = None
-            if flow_model.draft_version_id is not None:
-                draft = await db.get(FlowVersionModel, flow_model.draft_version_id, with_for_update=True)
+                draft: FlowVersionModel | None = None
+                if flow_model.draft_version_id is not None:
+                    draft = await db.get(FlowVersionModel, flow_model.draft_version_id, with_for_update=True)
 
-            if draft is None:
-                draft = FlowVersionModel(
-                    id=uuid.uuid4(),
-                    flow_id=flow_uuid,
-                    status=FlowVersionStatus.DRAFT,
-                    definition=definition,
-                    content_hash=digest,
-                )
-                db.add(draft)
-                await db.flush()
-                flow_model.draft_version_id = draft.id
+                if draft is None:
+                    if expected_row_version is not None:
+                        raise ConcurrencyError(
+                            f"Черновика {flow.id!r} не существует (ожидался row_version={expected_row_version})"
+                        )
+                    draft = FlowVersionModel(
+                        id=uuid.uuid4(),
+                        flow_id=flow_uuid,
+                        status=FlowVersionStatus.DRAFT,
+                        definition=definition,
+                        content_hash=digest,
+                    )
+                    db.add(draft)
+                    await db.flush()
+                    flow_model.draft_version_id = draft.id
+                    return draft.row_version
+
+                if expected_row_version is None:
+                    raise ConcurrencyError(
+                        f"Черновик {flow.id!r} уже существует — слепая перезапись запрещена, "
+                        "передайте expected_row_version из get_draft"
+                    )
+                if draft.row_version != expected_row_version:
+                    raise ConcurrencyError(
+                        f"Черновик {flow.id!r} изменён конкурентно: "
+                        f"row_version={draft.row_version}, ожидался {expected_row_version}"
+                    )
+                draft.definition = definition
+                draft.content_hash = digest
+                draft.row_version += 1
                 return draft.row_version
+        except IntegrityError as exc:  # гонка первого создания (pk flow / uq_flow_single_draft)
+            raise ConcurrencyError(f"Черновик {flow.id!r} создаётся конкурентно") from exc
 
-            if expected_row_version is not None and draft.row_version != expected_row_version:
-                raise ConcurrencyError(
-                    f"Черновик {flow.id!r} изменён конкурентно: "
-                    f"row_version={draft.row_version}, ожидался {expected_row_version}"
-                )
-            draft.definition = definition
-            draft.content_hash = digest
-            draft.row_version += 1
-            return draft.row_version
-
-    async def publish(self, flow_id: str) -> FlowVersion:
+    async def publish(
+        self,
+        flow_id: str,
+        *,
+        expected_row_version: int,
+        bot_id: str | None = None,
+        actor_id: str | None = None,
+    ) -> FlowVersion:
         async with self._session_factory() as db, db.begin():
             flow_uuid = uuid.UUID(flow_id)
             flow_model = await db.get(FlowModel, flow_uuid, with_for_update=True)
             if flow_model is None or flow_model.draft_version_id is None:
                 raise FlowNotFoundError(f"У сценария {flow_id!r} нет черновика для публикации")
-            draft = await db.get(FlowVersionModel, flow_model.draft_version_id)
+            draft = await db.get(FlowVersionModel, flow_model.draft_version_id, with_for_update=True)
             if draft is None:
                 raise FlowNotFoundError(f"Черновик сценария {flow_id!r} не найден")
-
-            next_version = (
-                await db.scalar(
-                    sa.select(sa.func.coalesce(sa.func.max(FlowVersionModel.version), 0)).where(
-                        FlowVersionModel.flow_id == flow_uuid
-                    )
+            if draft.row_version != expected_row_version:
+                # Анти-TOCTOU: публикуется ровно провалидированный снапшот.
+                raise ConcurrencyError(
+                    f"Черновик {flow_id!r} изменён после валидации: "
+                    f"row_version={draft.row_version}, ожидался {expected_row_version}"
                 )
-                or 0
-            ) + 1
+
+            bot_uuid = uuid.UUID(bot_id) if bot_id else None
+            if bot_uuid is not None and flow_model.bot_id is None:
+                flow_model.bot_id = bot_uuid  # обратная soft-ref для журнала публикаций
+
+            latest = await db.scalar(
+                sa.select(FlowVersionModel)
+                .where(
+                    FlowVersionModel.flow_id == flow_uuid,
+                    FlowVersionModel.status == FlowVersionStatus.PUBLISHED,
+                )
+                .order_by(FlowVersionModel.version.desc())
+                .limit(1)
+            )
+            if latest is not None and latest.content_hash == draft.content_hash:
+                # Идемпотентный ретрай: неизменённый черновик -> та же версия.
+                return mappers.model_to_flow_version(latest, flow_name=flow_model.name)
+
+            next_version = (latest.version or 0) + 1 if latest is not None else 1
             published = FlowVersionModel(
                 id=uuid.uuid4(),
                 flow_id=flow_uuid,
@@ -140,10 +187,11 @@ class PgFlowRepository:
             db.add(published)
             db.add(
                 PublishAuditModel(
-                    bot_id=flow_model.bot_id,
+                    bot_id=bot_uuid if bot_uuid is not None else flow_model.bot_id,
                     flow_id=flow_uuid,
                     flow_version_id=published.id,
                     action=PublishAction.PUBLISH,
+                    actor_id=uuid.UUID(actor_id) if actor_id else None,
                 )
             )
             await db.flush()
@@ -199,7 +247,8 @@ class PgSessionRepository:
                     db.add(mappers.session_to_model(session))
                 else:
                     mappers.apply_session_to_model(session, model)
-        except IntegrityError as exc:  # uq_session_active: вторая активная на (Bot, пользователь)
+        except IntegrityError as exc:  # uq_session_active: вторая активная на пару (Bot, user)
+            # ПДн (external_user_id) в текст ошибки не попадает.
             raise ConcurrencyError(
-                f"Активная Session для (bot={session.bot_id}, user={session.external_user_id}) уже существует"
+                f"Активная Session уже существует (bot={session.bot_id}, session={session.id})"
             ) from exc

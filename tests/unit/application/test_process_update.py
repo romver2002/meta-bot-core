@@ -11,6 +11,7 @@ from domain.events import IncomingEvent
 from domain.flow.entities import Button, Flow, Node, Transition, Trigger
 from domain.flow.value_objects import ButtonAction, NodeType, TriggerType
 from domain.flow.version import FlowVersion, FlowVersionStatus
+from domain.session.entities import SessionStatus
 from tests.unit.application.fakes import (
     InMemoryBotRepository,
     InMemoryFlowRepository,
@@ -126,10 +127,12 @@ async def test_answer_flows_through_condition_true_branch() -> None:
     await use_case.execute(_event(TriggerType.TEXT, text="Роман"))
 
     assert port.sent[-1].text == "Добро пожаловать, Роман!"
-    session = await sessions.get_active(BOT_ID, USER)
-    assert session is not None
-    assert session.variables == {"name": "Роман"}
-    assert session.awaiting_variable is None
+    # Цепочка дошла до конца: сессия завершена, пара (Bot, user) свободна.
+    assert await sessions.get_active(BOT_ID, USER) is None
+    stored = sessions.storage[(BOT_ID, USER)]
+    assert stored.status is SessionStatus.COMPLETED
+    assert stored.variables == {"name": "Роман"}
+    assert stored.awaiting_variable is None
 
 
 async def test_answer_flows_through_condition_false_branch() -> None:
@@ -151,9 +154,9 @@ async def test_show_buttons_waits_then_next_button_continues() -> None:
     # Нажатие кнопки next: payload адаптера = id целевого узла.
     await use_case.execute(_event(TriggerType.CALLBACK, payload="finish"))
 
-    session = await sessions.get_active(BOT_ID, USER)
-    assert session is not None
-    assert session.variables == {"finished": "yes"}  # save исполнился
+    stored = sessions.storage[(BOT_ID, USER)]
+    assert stored.variables == {"finished": "yes"}  # save исполнился
+    assert stored.status is SessionStatus.COMPLETED  # bye — конец цепочки
     assert port.sent[-1].text == "Готово, ."  # bye после save
 
 
@@ -188,6 +191,22 @@ async def test_foreign_platform_event_is_ignored() -> None:
     await use_case.execute(event)
 
     assert port.sent == []
+
+
+async def test_completed_session_restarts_fresh() -> None:
+    """После завершения сценария следующий /start начинает новую сессию."""
+    use_case, port, sessions = await _engine(_flow())
+    await use_case.execute(_event(TriggerType.START))
+    await use_case.execute(_event(TriggerType.TEXT, text="Иван"))  # -> plain, конец
+    first_id = sessions.storage[(BOT_ID, USER)].id
+
+    await use_case.execute(_event(TriggerType.START))
+
+    fresh = await sessions.get_active(BOT_ID, USER)
+    assert fresh is not None
+    assert fresh.id != first_id
+    assert fresh.variables == {}  # чистое состояние, без старого name
+    assert port.sent[-1].text == "Как вас зовут?"
 
 
 async def test_cyclic_flow_hits_step_limit() -> None:

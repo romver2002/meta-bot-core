@@ -18,14 +18,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from domain.bot.value_objects import BotStatus, Platform
 from domain.flow.version import FlowVersionStatus
-
-
-class SessionStatus(enum.StrEnum):
-    """Жизненный цикл durable-снапшота сессии (инфраструктурный)."""
-
-    ACTIVE = "active"
-    COMPLETED = "completed"
-    EXPIRED = "expired"
+from domain.session.entities import SessionStatus
 
 
 class PublishAction(enum.StrEnum):

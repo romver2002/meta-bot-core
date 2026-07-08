@@ -190,6 +190,7 @@ def session_to_model(session: Session) -> SessionModel:
         current_node_id=session.current_node_id,
         variables=dict(session.variables),
         awaiting_variable=session.awaiting_variable,
+        status=session.status,
     )
 
 
@@ -198,6 +199,7 @@ def apply_session_to_model(session: Session, model: SessionModel) -> None:
     model.current_node_id = session.current_node_id
     model.variables = dict(session.variables)
     model.awaiting_variable = session.awaiting_variable
+    model.status = session.status
 
 
 def model_to_session(model: SessionModel) -> Session:
@@ -209,4 +211,5 @@ def model_to_session(model: SessionModel) -> Session:
         current_node_id=model.current_node_id,
         variables=dict(model.variables),
         awaiting_variable=model.awaiting_variable,
+        status=model.status,
     )

@@ -32,3 +32,20 @@ async def test_create_bot_rejects_empty_token_br002() -> None:
     use_case = CreateBotUseCase(bots=InMemoryBotRepository(), token_vault=InMemoryTokenVault())
     with pytest.raises(BotCreationError, match="BR-002"):
         await use_case.execute(name="Без токена", platform=Platform.TELEGRAM, token_secret="   ")
+
+
+async def test_create_bot_rejects_existing_id() -> None:
+    """Create — не перезапись: коллизия id не сбрасывает работающего бота."""
+    bots, vault = InMemoryBotRepository(), InMemoryTokenVault()
+    use_case = CreateBotUseCase(bots=bots, token_vault=vault)
+    first = await use_case.execute(name="Первый", platform=Platform.MAX, token_secret="fake-a")
+
+    with pytest.raises(BotCreationError, match="уже существует"):
+        await use_case.execute(name="Клон", platform=Platform.TELEGRAM, token_secret="fake-b", bot_id=first.id)
+    assert bots.storage[first.id].name == "Первый"  # оригинал не тронут
+
+
+async def test_create_bot_rejects_malformed_id() -> None:
+    use_case = CreateBotUseCase(bots=InMemoryBotRepository(), token_vault=InMemoryTokenVault())
+    with pytest.raises(BotCreationError, match="UUID"):
+        await use_case.execute(name="Кривой id", platform=Platform.MAX, token_secret="fake", bot_id="bot-1")

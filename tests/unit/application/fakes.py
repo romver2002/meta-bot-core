@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from application.errors import ConcurrencyError
 from application.ports.bot_platform import SendMessageCommand
+from application.ports.flow_repository import FlowDraft
 from domain.bot.entities import Bot
 from domain.bot.value_objects import Platform
 from domain.capabilities import CapabilityMatrix
 from domain.flow.entities import Flow
 from domain.flow.version import FlowVersion, FlowVersionStatus
-from domain.session.entities import Session
+from domain.session.entities import Session, SessionStatus
 
 
 class InMemoryBotRepository:
@@ -32,22 +33,36 @@ class InMemoryFlowRepository:
         self.versions: dict[str, FlowVersion] = {}
         self._counters: dict[str, int] = {}
 
-    async def get_draft(self, flow_id: str) -> Flow | None:
-        return self.drafts.get(flow_id)
+    async def get_draft(self, flow_id: str) -> FlowDraft | None:
+        flow = self.drafts.get(flow_id)
+        if flow is None:
+            return None
+        return FlowDraft(flow=flow, row_version=self.row_versions[flow_id])
 
-    async def save_draft(self, flow: Flow, *, expected_row_version: int | None = None) -> int:
+    async def save_draft(self, flow: Flow, *, expected_row_version: int | None) -> int:
         current = self.row_versions.get(flow.id)
         if current is None:
+            if expected_row_version is not None:
+                raise ConcurrencyError(f"Черновика {flow.id!r} не существует")
             self.drafts[flow.id] = flow
             self.row_versions[flow.id] = 0
             return 0
-        if expected_row_version is not None and current != expected_row_version:
+        if expected_row_version is None or current != expected_row_version:
             raise ConcurrencyError(f"Черновик {flow.id!r} изменён конкурентно")
         self.drafts[flow.id] = flow
         self.row_versions[flow.id] = current + 1
         return self.row_versions[flow.id]
 
-    async def publish(self, flow_id: str) -> FlowVersion:
+    async def publish(
+        self,
+        flow_id: str,
+        *,
+        expected_row_version: int,
+        bot_id: str | None = None,
+        actor_id: str | None = None,
+    ) -> FlowVersion:
+        if self.row_versions.get(flow_id) != expected_row_version:
+            raise ConcurrencyError(f"Черновик {flow_id!r} изменён после валидации")
         number = self._counters.get(flow_id, 0) + 1
         self._counters[flow_id] = number
         version = FlowVersion(
@@ -72,7 +87,10 @@ class InMemorySessionRepository:
         self.storage: dict[tuple[str, str], Session] = {}
 
     async def get_active(self, bot_id: str, external_user_id: str) -> Session | None:
-        return self.storage.get((bot_id, external_user_id))
+        session = self.storage.get((bot_id, external_user_id))
+        if session is None or session.status is not SessionStatus.ACTIVE:
+            return None
+        return session
 
     async def save(self, session: Session) -> None:
         self.storage[(session.bot_id, session.external_user_id)] = session

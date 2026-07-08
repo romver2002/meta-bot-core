@@ -95,7 +95,11 @@ class ProcessUpdateUseCase:
         if start_node_id is None:
             return  # нераспознанное событие — сценарий не трогаем
 
-        await self._run_chain(flow, start_node_id, session, send)
+        chain_ended = await self._run_chain(flow, start_node_id, session, send)
+        if chain_ended:
+            # Сценарий дошёл до конца: пара (Bot, user) свободна, следующий
+            # триггер начнёт новую сессию на актуальной версии (ADR-0008).
+            session.complete()
         await self._sessions.save(session)
 
     # ── маршрутизация события ────────────────────────────────────────────────
@@ -143,11 +147,12 @@ class ProcessUpdateUseCase:
 
     # ── исполнение цепочки блоков ────────────────────────────────────────────
 
-    async def _run_chain(self, flow: Flow, start_node_id: str, session: Session, send: _Send) -> None:
+    async def _run_chain(self, flow: Flow, start_node_id: str, session: Session, send: _Send) -> bool:
+        """Исполняет цепочку узлов; True — сценарий дошёл до конца (нет ожидания)."""
         node_id: str | None = start_node_id
         for _ in range(MAX_STEPS):
             if node_id is None:
-                return  # цепочка закончилась — ждём следующий триггер
+                return True  # цепочка закончилась
             node = flow.nodes.get(node_id)
             if node is None:
                 raise FlowExecutionError(f"Узел {node_id!r} отсутствует в сценарии {flow.id!r}")
@@ -161,11 +166,11 @@ class ProcessUpdateUseCase:
                     render_text(str(node.params.get("text", "")), session.variables),
                     node.buttons,
                 )
-                return  # ждём нажатие кнопки (callback)
+                return False  # ждём нажатие кнопки (callback)
             elif node.type is NodeType.ASK:
                 await send(render_text(str(node.params.get("prompt", "")), session.variables), ())
                 session.await_answer(str(node.params.get("save_as", "")))
-                return  # ждём ответ пользователя
+                return False  # ждём ответ пользователя
             elif node.type is NodeType.CONDITION:
                 outcome = evaluate_condition(str(node.params.get("expression", "")), session.variables)
                 node_id = self._transition_target(flow, node.id, "true" if outcome else "false")

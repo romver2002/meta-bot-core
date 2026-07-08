@@ -136,6 +136,15 @@ class Flow:
             )
         if unreachable := self._unreachable_nodes():
             problems.append("узлы недостижимы от триггеров: " + ", ".join(sorted(unreachable)))
+        seen_outcomes: set[tuple[str, str]] = set()
+        for transition in self.transitions:
+            outcome = (transition.source_node_id, transition.on)
+            if outcome in seen_outcomes:
+                problems.append(
+                    f"недетерминированный переход: у узла {transition.source_node_id!r} "
+                    f"больше одного исхода {transition.on!r}"
+                )
+            seen_outcomes.add(outcome)
         if problems:
             raise FlowValidationError("; ".join(problems))
 

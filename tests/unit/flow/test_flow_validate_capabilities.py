@@ -60,6 +60,25 @@ def test_flow_without_trigger_marks_all_unreachable() -> None:
         flow.validate_for_publication(full_capabilities())
 
 
+def test_duplicate_outcome_rejected() -> None:
+    """Два перехода с одинаковым (source, on) — недетерминизм, публикация запрещена."""
+    from domain.flow.entities import Transition
+
+    base = make_flow()
+    flow = Flow(
+        id=base.id,
+        name=base.name,
+        nodes=dict(base.nodes),
+        triggers=base.triggers,
+        transitions=(
+            *base.transitions,
+            Transition(source_node_id="greet", target_node_id="greet"),  # дубль greet/next
+        ),
+    )
+    with pytest.raises(FlowValidationError, match="недетерминированный"):
+        flow.validate_for_publication(full_capabilities())
+
+
 def test_reachability_via_next_button() -> None:
     from domain.flow.entities import Button
 
