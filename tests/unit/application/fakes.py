@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
+
 from application.errors import ConcurrencyError
 from application.ports.bot_platform import SendMessageCommand
 from application.ports.flow_repository import FlowDraft
 from domain.bot.entities import Bot
 from domain.bot.value_objects import Platform
 from domain.capabilities import CapabilityMatrix
+from domain.events import IncomingEvent
 from domain.flow.entities import Flow
 from domain.flow.version import FlowVersion, FlowVersionStatus
 from domain.session.entities import Session, SessionStatus
@@ -114,14 +117,24 @@ class InMemoryTokenVault:
 class StubPlatform:
     """Управляемый фейк BotPlatformPort."""
 
-    def __init__(self, capabilities: CapabilityMatrix, *, token_is_valid: bool = True) -> None:
+    def __init__(
+        self,
+        capabilities: CapabilityMatrix,
+        *,
+        token_is_valid: bool = True,
+        parser: Callable[[str, Mapping[str, object]], IncomingEvent | None] | None = None,
+    ) -> None:
         self._capabilities = capabilities
         self._token_is_valid = token_is_valid
+        self._parser = parser
         self.verified_tokens: list[str] = []
         self.sent: list[SendMessageCommand] = []
 
     def capabilities(self) -> CapabilityMatrix:
         return self._capabilities
+
+    def parse_update(self, bot_id: str, payload: Mapping[str, object]) -> IncomingEvent | None:
+        return self._parser(bot_id, payload) if self._parser is not None else None
 
     async def verify_token(self, token: str) -> bool:
         self.verified_tokens.append(token)
@@ -129,6 +142,19 @@ class StubPlatform:
 
     async def send_message(self, command: SendMessageCommand) -> None:
         self.sent.append(command)
+
+
+class StubIdempotency:
+    """In-memory реализация IdempotencyPort."""
+
+    def __init__(self) -> None:
+        self.seen: set[str] = set()
+
+    async def first_time(self, key: str) -> bool:
+        if key in self.seen:
+            return False
+        self.seen.add(key)
+        return True
 
 
 class StubPlatformFactory:
