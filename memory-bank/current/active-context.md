@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.13"
+version: "1.14"
 updated: 2026-07-08
 verified_commit: ""
 owner: ""
@@ -48,6 +48,7 @@ owner: ""
 - 2026-07-08 — Адверсариальный аудит (50 агентов): 40 подтверждённых находок исправлено (TOCTOU публикации, идемпотентный publish, create-коллизия, завершение Session, non-root Docker, loopback-порты, CI с тестами и покрытием 96%); отложенное зафиксировано в progress. Гейт: 72 теста, mypy 52 файла, 6/6 контрактов
 - 2026-07-08 — Живой контур: адаптеры Telegram/MAX (ADR-0009, тонкий httpx), webhook с идемпотентностью Redis, Admin API (create/flow/publish/get), Flow Engine подключён в composition root. Гейт: 84 теста (в т.ч. e2e золотого пути и живой смоук на PG), mypy 72 файла, 6/6 контрактов
 - 2026-07-08 — Глубокое сравнение TG/MAX (рой, 55 агентов, 594 обращения к докам): отчёт specs/002-platform-deep-dive (38 confirmed/6 uncertain/2 refuted). Исправлено: ключ идемпотентности MaxBotAdapter на mid/callback_id; 2 ошибки в platform-reference (init data HMAC одинаков; у MAX нет платежей) + числа; чек-лист требует-проверки в progress
+- 2026-07-08 — Валидация init data mini app (BR-007): общее HMAC-ядро webapp_signature (TG/MAX идентичны, из specs/002), per-platform обёртки, BotPlatformPort.validate_init_data, AuthenticateMiniAppUseCase, эндпоинт POST /api/bots/{id}/miniapp/auth. Гейт: 99 тестов (криптовекторы, срок, подделка, e2e через реальный адаптер) + живой смоук на контейнере (200/401/401).
 
 ## Следующие шаги
 
