@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.5"
+version: "1.6"
 updated: 2026-07-08
 verified_commit: ""
 owner: ""
@@ -54,7 +54,8 @@ owner: ""
 
 - 2026-07-08 — канон портов/use case'ов ([../architecture/overview.md](../architecture/overview.md))
   не содержит `BotRepository`, `IdempotencyPort`, `SaveFlowDraftUseCase`,
-  `GetBotUseCase` — добавлены кодом (Admin API/webhook их требуют); внести в
+  `GetBotUseCase`, `AuthenticateMiniAppUseCase`, `BotPlatformPort.validate_init_data`
+  — добавлены кодом (Admin API/webhook/mini app их требуют); внести в
   glossary/patterns/overview при ратификации ADR-0008/0009.
 
 ## Технический долг
@@ -72,10 +73,9 @@ owner: ""
   (2) seed `capability_matrix` в БД — матрицы v1 живут в адаптерах, таблица
   ждёт ратификации ADR-0005; (3) `session.flow_version_id/current_node_id`
   nullable вопреки design.md §1 — черновая сессия создаётся до первого шага.
-- 2026-07-08 — перед релизом MAX сверить живым запросом к `platform-api2.max.ru`
-  6 пунктов «требует проверки» из `specs/002-platform-deep-dive/report.md` §6
-  (дефолт `update_types`, `Retry-After`/429, TTL/обязательность `callback_id`,
-  ключи формулы `requestContact`, сортировка и TTL `auth_date` в initData).
+- 2026-07-08 — перед релизом MAX сверить живым запросом 6 пунктов «требует
+  проверки» из `specs/002-platform-deep-dive/report.md` §6 (`update_types`,
+  429/`Retry-After`, `callback_id`, `requestContact`, сортировка/TTL initData).
 
 ---
 
