@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.4"
+version: "1.5"
 updated: 2026-07-08
 verified_commit: ""
 owner: ""
@@ -20,25 +20,21 @@ owner: ""
 - 2026-07-06 — строгий контур CA: [.importlinter](../../.importlinter)
   (6 контрактов), CI [arch-lint](../../.github/workflows/arch-lint.yml) +
   [ci.yml](../../.github/workflows/ci.yml) (ruff/mypy/pytest, coverage ≥90%).
-- 2026-07-06 — реестр ADR: 0001–0002 accepted, 0003–0008 proposed.
-- 2026-07-08 — вертикальный срез бэкенда в `src/` по канону CA: domain
-  (Bot/Flow/Session, инварианты BR-001/003/006), application (6 портов,
-  CreateBot/PublishBot), presentation (`/health`), скелет infrastructure.
-  Контур качества зелёный: ruff (ALL) · mypy strict · `lint-imports` 5/5 ·
-  pytest 32 unit. Стек: Python 3.14 + uv (`uv.lock`), Dockerfile + compose
-  (PG16+Redis7) — по образцу sro-agent-core.
+- 2026-07-06 — реестр ADR: 0001–0002 accepted, 0003–0009 proposed.
+- 2026-07-08 — бэкенд по канону CA (Python 3.14 + uv, PG16+Redis7): domain
+  (Bot/Flow/Session, BR-001/003/006), хранение ADR-0008 (версии Flow, Alembic),
+  Flow Engine, адаптеры Telegram/MAX (ADR-0009), webhook с идемпотентностью,
+  Admin API. Гейт зелёный: ruff · mypy strict · lint-imports 6 контрактов ·
+  81 unit + 4 integration (testcontainers PG16) · e2e золотого пути + живой смоук.
 - 2026-07-08 — прототип редактора `frontend/constructor/` (React Flow, ADR-0007).
-- 2026-07-08 — хранение по ADR-0008 реализовано: ORM-модели, Pg-репозитории
-  (версии Flow, оптимистический лок, единственная активная Session),
-  Alembic-миграция 0001; интеграционные тесты на testcontainers (PG16) зелёные.
 
 ## В работе
 
 <!-- Начато, но не завершено; в каком состоянии оставлено и что дальше. -->
 
-- 2026-07-08 — ратификация ADR [0003](../decisions/0003-flow-engine-blocks-and-sandbox.md)–[0008](../decisions/0008-persistence-model.md):
-  пока proposed, ждут решения команды. Следом — `infrastructure/db` по ADR-0008
-  (models/mappers/repositories, Alembic, testcontainers) и admin/webhook-роуты.
+- 2026-07-08 — ратификация ADR [0003](../decisions/0003-flow-engine-blocks-and-sandbox.md)–[0009](../decisions/0009-max-adapter-thin-client.md):
+  пока proposed, ждут решения команды. Следом — редактор ↔ Admin API и этап
+  mini app (auth BR-007 + блок open_mini_app + триггер mini_app_result).
 
 ## Известные проблемы
 
@@ -76,6 +72,10 @@ owner: ""
   (2) seed `capability_matrix` в БД — матрицы v1 живут в адаптерах, таблица
   ждёт ратификации ADR-0005; (3) `session.flow_version_id/current_node_id`
   nullable вопреки design.md §1 — черновая сессия создаётся до первого шага.
+- 2026-07-08 — перед релизом MAX сверить живым запросом к `platform-api2.max.ru`
+  6 пунктов «требует проверки» из `specs/002-platform-deep-dive/report.md` §6
+  (дефолт `update_types`, `Retry-After`/429, TTL/обязательность `callback_id`,
+  ключи формулы `requestContact`, сортировка и TTL `auth_date` в initData).
 
 ---
 

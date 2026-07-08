@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.1"
-updated: 2026-07-07
+version: "1.2"
+updated: 2026-07-08
 verified_commit: ""
 owner: ""
 ---
@@ -104,14 +104,22 @@ owner: ""
   (пользователь, чат, `queryId`, `authDate`); `shareContent()`/`shareMaxContent()`,
   `BackButton`, `openLink()`/`openMaxLink()`, `openCodeReader()` (QR),
   `DeviceStorage`/`SecureStorage`, `BiometricManager`, `HapticFeedback`, NFC (Android).
-- Валидация init data на backend: `HMAC_SHA256` по отсортированным параметрам с
-  ключом-токеном бота, сверка с `hash` (BR-007).
+- Валидация init data на backend: **тот же HMAC-алгоритм, что у Telegram** —
+  `secret_key = HMAC_SHA256(key="WebAppData", msg=bot_token)`, затем
+  `hash == hex(HMAC_SHA256(key=secret_key, msg=data_check_string))`, сверка +
+  проверка `auth_date` (BR-007). Отличие MAX — двухуровневый транспорт (фрагмент
+  URL `#` → параметр `WebAppData`; `WebAppPlatform`/`WebAppVersion` в подпись НЕ
+  входят) и **отдельная** формула для `requestContact` (ключ = токен напрямую,
+  `phone` без `+`). Ed25519-пути (как у Telegram) у MAX нет. Пошагово оба
+  алгоритма — [specs/002-platform-deep-dive](../../specs/002-platform-deep-dive/report.md) §3.
 
 ## Сводная матрица возможностей (данные для `CapabilityMatrix`)
 
 Основа для `CapabilityMatrix` (ADR [0005](../decisions/0005-capability-matrix.md)):
 единый блок конструктора доступен, только если возможность есть на платформе бота
-(BR-006). Таблица — проверенный срез на 2026-07-06; при изменении API правится здесь.
+(BR-006). Таблица — проверенный срез; полный детальный разбор с числами, лимитами
+и пошаговыми алгоритмами — [specs/002-platform-deep-dive](../../specs/002-platform-deep-dive/report.md)
+(верификация по офиц. докам 2026-07-08). При изменении API правится здесь.
 
 | Возможность | Telegram | MAX | Блок / примечание |
 |---|---|---|---|
@@ -119,16 +127,22 @@ owner: ""
 | Inline/callback-кнопки | да | да | `Show Buttons` (общий), разные мапперы |
 | Запуск mini app | да (7 способов) | да (только внутри MAX, привязан к боту) | `Open Mini App` (общий), разный launch/bridge |
 | Mini app без бота | привязан к боту | нет (только в чат-боте) | BR-003 |
-| Валидация init data | `HMAC_SHA256(bot_token,"WebAppData")` | `HMAC_SHA256` по параметрам с токеном | BR-007, алгоритмы разные |
+| Валидация init data (HMAC) | `secret_key=HMAC("WebAppData",token)` → `HMAC(secret_key, data_check_string)` | **тот же алгоритм** (+ двухуровневый транспорт, отдельная формула requestContact) | BR-007; ядро одинаково |
+| Валидация init data (Ed25519, без токена) | есть (`signature`+`bot_id`) | нет | TG-only |
+| Дедуп обновлений | сквозной `update_id` | **нет per-update id** → `message.body.mid` / `callback.callback_id` / составной; `seq` не использовать | различие моделей |
+| Возврат данных из mini app боту | `sendData` ≤4096B (только reply-кнопка) / `answerWebAppQuery` | **нет `sendData`** — через свой backend с валидир. initData | разные модели |
+| Длина текста / callback_data | текст ≤4096 (UTF-16); `callback_data` **1–64 байта** | текст ≤4000; `payload` ≤1024 | состояние — в Redis, в кнопку короткий токен |
 | Порты webhook | 443/80/88/8443 | только 443 | конфиг `WEBHOOK_BASE_URL` |
 | Self-signed сертификат | допускается | не поддерживается (нужен доверенный УЦ) | |
 | Авторизация API | токен в пути URL | заголовок `Authorization` | различие адаптера |
 | Long polling | есть, взаимоисключимо с webhook | есть, но не для prod | ADR-0004 |
 | Секрет вебхука | `X-Telegram-Bot-Api-Secret-Token` | `X-Max-Bot-Api-Secret` | |
-| Ретраи доставки вебхука | механизм Telegram | до 10, экспон.; 8 ч без `200 OK` → авто-отписка | алерт в observability |
+| Ретраи доставки вебхука | любой 2XX = успех; политика не опубликована; хранение ~24 ч | до 10 (60/150/375 c…); 8 ч без `200 OK` → авто-отписка | алерт в observability |
+| `Retry-After` при 429 | `parameters.retry_after` (секунды) | **не отдаёт** (требует проверки) → backoff сами | TG-only |
+| Лимит частоты | по отправке: ~1/с в чат, 20/мин в группу, ~30/с рассылка | **30 rps на весь хост** `platform-api2.max.ru` | разные RateLimiter |
 | QR-сканер в mini app | — | `openCodeReader()` | platform-specific |
 | Биометрия / NFC / haptics в mini app | ограниченно | `BiometricManager` / NFC / `HapticFeedback` | bridge MAX богаче |
-| Платежи | Telegram Payments | иные механики | ADR-0005: осторожно, platform-specific блоки |
+| Платежи | Telegram Payments (+ Stars/XTR): sendInvoice→pre_checkout(≤10c)→successful_payment→refund | **нет** (ни методов, ни bridge) — только внешний эквайринг через кнопку-ссылку | platform-specific, **TG-only** (ADR-0005) |
 
 Пустая ячейка / «—» = возможности нет или она принципиально иная → в конструкторе
 блок для этой платформы не предлагается, при публикации отклоняется (BR-006).
