@@ -11,32 +11,36 @@ import Palette from './components/Palette.jsx'
 import ConfigPanel from './components/ConfigPanel.jsx'
 import TopBar from './components/TopBar.jsx'
 import JsonDrawer from './components/JsonDrawer.jsx'
+import ApiPanel from './components/ApiPanel.jsx'
 import { initialNodes, initialEdges } from './flow/initialFlow.js'
 import { serializeFlow, validateFlow } from './flow/serialize.js'
-import { BLOCK_BY_TYPE } from './domain/catalog.js'
+import { OUTCOME_LABELS, makeDefaultParams } from './domain/catalog.js'
 
 let counter = 100
 const newId = () => `n${counter++}`
+const initialPaletteOpen = () => (typeof window === 'undefined' ? true : window.innerWidth > 900)
 
 function Editor() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [platform, setPlatform] = useState('telegram')
-  const [botName, setBotName] = useState('Кофейня Bot')
+  const [botName, setBotName] = useState('Умный помощник по заявкам')
   const [selectedId, setSelectedId] = useState(null)
   const [showJson, setShowJson] = useState(false)
   const [problems, setProblems] = useState(null)
+  const [paletteOpen, setPaletteOpen] = useState(initialPaletteOpen)
+  const [rightOpen, setRightOpen] = useState(false)
+  const [rightTab, setRightTab] = useState('settings')
   const { screenToFlowPosition } = useReactFlow()
 
   const nodeTypes = useMemo(() => ({ block: BlockNode, trigger: TriggerNode }), [])
 
   const onConnect = useCallback((c) => {
-    const isYes = c.sourceHandle === 'true'
-    const isNo = c.sourceHandle === 'false'
-    const color = isYes ? '#16A34A' : isNo ? '#64748B' : undefined
+    const colors = { true: '#16A34A', false: '#64748B', error: '#DC2626' }
+    const color = colors[c.sourceHandle]
     setEdges((eds) => addEdge({
       ...c,
-      label: isYes ? 'да' : isNo ? 'нет' : undefined,
+      label: OUTCOME_LABELS[c.sourceHandle] || undefined,
       style: color ? { stroke: color } : undefined,
       markerEnd: { type: MarkerType.ArrowClosed, color },
     }, eds))
@@ -53,21 +57,31 @@ function Editor() {
     const id = newId()
     if (item.group === 'trigger') {
       setNodes((nds) => [...nds, { id, type: 'trigger', position,
-        data: { group: 'trigger', type: item.type, label: item.label, icon: item.icon } }])
+        data: { group: 'trigger', type: item.type, label: item.label, icon: item.icon, config: {} } }])
     } else {
-      const def = BLOCK_BY_TYPE[item.type]
-      const params = Object.fromEntries((def.fields || []).map((f) => [f.key, f.kind === 'buttons' ? [] : '']))
+      const params = makeDefaultParams(item.type)
       setNodes((nds) => [...nds, { id, type: 'block', position, data: { group: 'block', type: item.type, params } }])
     }
     setSelectedId(id)
+    setRightTab('settings')
+    setRightOpen(true)
   }, [screenToFlowPosition, setNodes])
 
-  const onNodeClick = useCallback((_, n) => setSelectedId(n.id), [])
+  const onNodeClick = useCallback((_, n) => {
+    setSelectedId(n.id)
+    setRightTab('settings')
+    setRightOpen(true)
+  }, [])
   const onPaneClick = useCallback(() => setSelectedId(null), [])
 
   const updateParams = useCallback((id, patch) => {
     setNodes((nds) => nds.map((n) => (n.id === id
       ? { ...n, data: { ...n.data, params: { ...n.data.params, ...patch } } } : n)))
+  }, [setNodes])
+
+  const updateTriggerConfig = useCallback((id, patch) => {
+    setNodes((nds) => nds.map((n) => (n.id === id
+      ? { ...n, data: { ...n.data, config: { ...(n.data.config || {}), ...patch } } } : n)))
   }, [setNodes])
 
   const deleteNode = useCallback((id) => {
@@ -77,10 +91,14 @@ function Editor() {
   }, [setNodes, setEdges])
 
   const selected = nodes.find((n) => n.id === selectedId) || null
-  const validation = validateFlow(nodes)
+  const validation = validateFlow(nodes, edges, platform)
   const flow = serializeFlow(nodes, edges, { botName, platform })
 
   const onCheck = () => setProblems(validation)
+  const openPublish = () => {
+    setRightTab('publish')
+    setRightOpen(true)
+  }
 
   return (
     <div className="app">
@@ -89,10 +107,20 @@ function Editor() {
         platform={platform} setPlatform={setPlatform}
         validation={validation} showJson={showJson} setShowJson={setShowJson}
         onCheck={onCheck}
+        paletteOpen={paletteOpen} setPaletteOpen={setPaletteOpen}
+        rightOpen={rightOpen} setRightOpen={setRightOpen}
       />
 
-      <div className="workspace">
-        <Palette platform={platform} />
+      <div className={`workspace ${!paletteOpen ? 'workspace--noPalette' : ''} ${!rightOpen ? 'workspace--noRight' : ''}`}>
+        {paletteOpen && (
+          <div className="leftRail">
+            <div className="railHead">
+              <span>Блоки</span>
+              <button className="icon-btn" onClick={() => setPaletteOpen(false)} title="Закрыть палитру">✕</button>
+            </div>
+            <Palette platform={platform} />
+          </div>
+        )}
 
         <div className="canvas" onDrop={onDrop} onDragOver={onDragOver}>
           <ReactFlow
@@ -117,8 +145,37 @@ function Editor() {
           )}
         </div>
 
-        <ConfigPanel node={selected} onChange={updateParams} onDelete={deleteNode} />
+        {rightOpen && (
+          <div className="rightRail">
+            <div className="rightRail__head">
+              <div className="tabs">
+                <button className={`tab ${rightTab === 'settings' ? 'tab--on' : ''}`} onClick={() => setRightTab('settings')}>
+                  Настройки
+                </button>
+                <button className={`tab ${rightTab === 'publish' ? 'tab--on' : ''}`} onClick={openPublish}>
+                  Публикация
+                </button>
+              </div>
+              <button className="icon-btn" onClick={() => setRightOpen(false)} title="Закрыть панель">✕</button>
+            </div>
+            {rightTab === 'settings' ? (
+              <ConfigPanel
+                node={selected}
+                nodes={nodes}
+                onParamsChange={updateParams}
+                onConfigChange={updateTriggerConfig}
+                onDelete={deleteNode}
+              />
+            ) : (
+              <ApiPanel flow={flow} validation={validation} botName={botName} platform={platform} />
+            )}
+          </div>
+        )}
       </div>
+
+      {(paletteOpen || rightOpen) && (
+        <button className="drawerScrim" onClick={() => { setPaletteOpen(false); setRightOpen(false) }} aria-label="Закрыть панели" />
+      )}
 
       {showJson && <JsonDrawer flow={flow} onClose={() => setShowJson(false)} />}
     </div>

@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.19"
+version: "1.21"
 updated: 2026-07-09
 verified_commit: ""
 owner: ""
@@ -53,6 +53,8 @@ owner: ""
 - 2026-07-08 — Лоуп mini app: блок open_mini_app (движок шлёт кнопку запуска web_app/open_app и ждёт), триггер mini_app_result (эндпоинт результата -> движок продолжает сценарий), AttachMiniAppUseCase + эндпоинт привязки. CapabilityMatrix v1 расширена. Гейт: 117 unit, mypy 79, 6/6 контрактов.
 - 2026-07-09 — Запущен frontend/constructor dev server: Vite на http://127.0.0.1:5173/, HTTP 200; для запуска потребовалось выполнение вне sandbox из-за Access denied в esbuild на родительские каталоги Windows-пути.
 - 2026-07-09 — первый бот 'умный помощник по заявкам' собран как Flow-данные (examples/), live-smoke пройден в Telegram (меню/навигация вживую); must-fix остаточной http_request-переменной (null-content → прошлый ответ) починен + регресс-тест
+- 2026-07-09 — Актуализирован frontend/constructor по текущему Flow Engine/API конструктора: ruflo-аудит контракта, Engine v1 catalog без active custom_code, trigger.config, http_request JSON body/headers/response_map + error outcome, button targets, панель «Боты и публикация» (create/save row_version/publish/miniapp/secrets), стартовый шаблон умного помощника; npm build зелёный.
+- 2026-07-09 — Исправлен UX frontend/constructor после замечаний: закрываемые палитра и правая панель, вкладки Настройки/Публикация, раскрываемые секции формы публикации, drawer-поведение на узких экранах, автопоказ настроек при добавлении/выборе блока; npm build зелёный.
 
 ## Следующие шаги
 

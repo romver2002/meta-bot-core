@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.9"
+version: "1.10"
 updated: 2026-07-09
 verified_commit: ""
 owner: ""
@@ -21,7 +21,8 @@ owner: ""
   [arch-lint](../../.github/workflows/arch-lint.yml)/[ci.yml](../../.github/workflows/ci.yml) (ruff/mypy/pytest, coverage ≥90%).
 - 2026-07-06 — реестр ADR: 0001–0002 accepted, 0003–0009 proposed.
 - 2026-07-08 — бэкенд по канону CA (Python 3.14 + uv, PG16+Redis7): domain (Bot/Flow/Session, BR-001/003/006), хранение ADR-0008, Flow Engine, адаптеры Telegram/MAX, webhook с идемпотентностью, Admin API. Гейт зелёный: ruff · mypy strict · lint-imports 6 контрактов · 81 unit + 4 integration · e2e золотого пути + живой смоук.
-- 2026-07-08 — прототип редактора `frontend/constructor/` (React Flow, ADR-0007).
+- 2026-07-09 — `frontend/constructor/` актуализирован под живой Flow Engine/API конструктора: Engine v1 palette без active `custom_code`, `trigger.config`, `http_request` object fields + `error`, `Button.target`, панель «Боты и публикация» (`create`/`save row_version`/`publish`/mini app/secrets), стартовый шаблон «умного помощника по заявкам».
+- 2026-07-09 — UX редактора исправлен: палитра и правая панель закрываются/открываются, справа вкладки «Настройки»/«Публикация», формы публикации раскрываются секциями, на узких экранах панели работают как drawer поверх холста.
 - 2026-07-08 — mini app end-to-end: auth init data (BR-007), блок `open_mini_app`, триггер `mini_app_result`, привязка mini app к боту.
 - 2026-07-09 — блок `http_request` (звонок в любой HTTP-API, `{{secret:*}}` за портом) + секреты подключения за портом; AI-ответ через OpenRouter выражается ДАННЫМИ Flow, без бото-специфики в ядре.
 - 2026-07-09 — первый бот «умный помощник по заявкам» как Flow-данные ([examples/first-bot-request-assistant/](../../examples/first-bot-request-assistant/)): каркас + живой AI-ответ (OpenRouter) + форма; live-smoke в Telegram пройден (навигация/меню вживую). Движковый must-fix остаточной `http_request`-переменной (null-content → прошлый ответ) починен + регресс-тест.

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
-  "description": "Визуальный конструктор сценариев (Flow) ботов meta-bot-core — прототип на React Flow",
+  "description": "API-aware визуальный конструктор сценариев (Flow) ботов meta-bot-core на React Flow",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
