@@ -205,7 +205,7 @@
       "id": "n_ask_prompt",
       "type": "ask",
       "params": {
-        "prompt": "Напишите ваш вопрос одним сообщением — отвечу по базе знаний.",
+        "prompt": "Напишите ваш вопрос одним сообщением — отвечу по базе знаний.\n\nℹ️ Вопрос обрабатывается внешним AI-сервисом — пожалуйста, не указывайте в нём персональные данные.",
         "save_as": "user_question"
       },
       "buttons": []
@@ -305,11 +305,22 @@
     },
     {
       "id": "req_start",
-      "type": "send_message",
+      "type": "show_buttons",
       "params": {
-        "text": "Оформим заявку. Задам несколько коротких вопросов. В любой момент можно вернуться в меню кнопкой ниже или командой /start."
+        "text": "Оформим заявку — задам несколько коротких вопросов.\n\n🔒 Для связи по заявке понадобятся ваши имя и контакт. Нажимая «Согласен», вы разрешаете их обработку для ответа на заявку; данные хранятся ограниченный срок и удаляются автоматически."
       },
-      "buttons": []
+      "buttons": [
+        {
+          "label": "✅ Согласен — продолжить",
+          "action": "next",
+          "target": "req_ask_name"
+        },
+        {
+          "label": "⬅️ В меню",
+          "action": "next",
+          "target": "n_menu"
+        }
+      ]
     },
     {
       "id": "req_ask_name",
@@ -371,12 +382,12 @@
         {
           "label": "🔄 Заполнить заново",
           "action": "next",
-          "target": "req_start"
+          "target": "req_ask_name"
         },
         {
           "label": "⬅️ Отменить",
           "action": "next",
-          "target": "n_menu"
+          "target": "req_wipe_cancel"
         }
       ]
     },
@@ -384,7 +395,7 @@
       "id": "req_done",
       "type": "show_buttons",
       "params": {
-        "text": "Готово, {req_name}! Заявка принята. Специалист свяжется с вами: {req_contact}. Спасибо!"
+        "text": "✅ Готово! Заявка передана специалисту — он свяжется с вами по указанному контакту. Спасибо!"
       },
       "buttons": [
         {
@@ -396,11 +407,22 @@
     },
     {
       "id": "dev_start",
-      "type": "send_message",
+      "type": "show_buttons",
       "params": {
-        "text": "Передам ваш вопрос разработчику. Опишите его в двух шагах."
+        "text": "Передам ваш вопрос разработчику.\n\n🔒 Понадобится ваш контакт для ответа. Нажимая «Согласен», вы разрешаете его обработку; данные хранятся ограниченный срок и удаляются автоматически."
       },
-      "buttons": []
+      "buttons": [
+        {
+          "label": "✅ Согласен — отправить вопрос",
+          "action": "next",
+          "target": "dev_ask_message"
+        },
+        {
+          "label": "⬅️ В меню",
+          "action": "next",
+          "target": "n_menu"
+        }
+      ]
     },
     {
       "id": "dev_ask_message",
@@ -435,12 +457,12 @@
         {
           "label": "🔄 Заново",
           "action": "next",
-          "target": "dev_start"
+          "target": "dev_ask_message"
         },
         {
           "label": "⬅️ Отмена",
           "action": "next",
-          "target": "n_menu"
+          "target": "dev_wipe_cancel"
         }
       ]
     },
@@ -448,7 +470,7 @@
       "id": "dev_done",
       "type": "show_buttons",
       "params": {
-        "text": "Передал! Разработчик свяжется с вами: {dev_contact}. Спасибо!"
+        "text": "📨 Передал! Разработчик свяжется с вами по указанному контакту. Спасибо!"
       },
       "buttons": [
         {
@@ -510,6 +532,56 @@
         "expression": "dev_contact"
       },
       "buttons": []
+    },
+    {
+      "id": "req_wipe_done",
+      "type": "save",
+      "params": {
+        "values": {
+          "req_name": "",
+          "req_contact": "",
+          "req_task": "",
+          "req_deadline": "",
+          "req_budget": ""
+        }
+      },
+      "buttons": []
+    },
+    {
+      "id": "req_wipe_cancel",
+      "type": "save",
+      "params": {
+        "values": {
+          "req_name": "",
+          "req_contact": "",
+          "req_task": "",
+          "req_deadline": "",
+          "req_budget": ""
+        }
+      },
+      "buttons": []
+    },
+    {
+      "id": "dev_wipe_done",
+      "type": "save",
+      "params": {
+        "values": {
+          "dev_message": "",
+          "dev_contact": ""
+        }
+      },
+      "buttons": []
+    },
+    {
+      "id": "dev_wipe_cancel",
+      "type": "save",
+      "params": {
+        "values": {
+          "dev_message": "",
+          "dev_contact": ""
+        }
+      },
+      "buttons": []
     }
   ],
   "transitions": [
@@ -544,11 +616,6 @@
       "on": "false"
     },
     {
-      "source_node_id": "req_start",
-      "target_node_id": "req_ask_name",
-      "on": "next"
-    },
-    {
       "source_node_id": "req_ask_name",
       "target_node_id": "req_ask_contact",
       "on": "next"
@@ -574,11 +641,6 @@
       "on": "next"
     },
     {
-      "source_node_id": "dev_start",
-      "target_node_id": "dev_ask_message",
-      "on": "next"
-    },
-    {
       "source_node_id": "dev_ask_message",
       "target_node_id": "dev_ask_contact",
       "on": "next"
@@ -586,16 +648,6 @@
     {
       "source_node_id": "dev_ask_contact",
       "target_node_id": "dev_confirm",
-      "on": "next"
-    },
-    {
-      "source_node_id": "req_notify",
-      "target_node_id": "req_done",
-      "on": "next"
-    },
-    {
-      "source_node_id": "dev_notify",
-      "target_node_id": "dev_done",
       "on": "next"
     },
     {
@@ -617,6 +669,36 @@
       "source_node_id": "dev_confirm_guard",
       "target_node_id": "dev_start",
       "on": "false"
+    },
+    {
+      "source_node_id": "req_notify",
+      "target_node_id": "req_wipe_done",
+      "on": "next"
+    },
+    {
+      "source_node_id": "req_wipe_done",
+      "target_node_id": "req_done",
+      "on": "next"
+    },
+    {
+      "source_node_id": "req_wipe_cancel",
+      "target_node_id": "n_menu",
+      "on": "next"
+    },
+    {
+      "source_node_id": "dev_notify",
+      "target_node_id": "dev_wipe_done",
+      "on": "next"
+    },
+    {
+      "source_node_id": "dev_wipe_done",
+      "target_node_id": "dev_done",
+      "on": "next"
+    },
+    {
+      "source_node_id": "dev_wipe_cancel",
+      "target_node_id": "n_menu",
+      "on": "next"
     }
   ]
 }

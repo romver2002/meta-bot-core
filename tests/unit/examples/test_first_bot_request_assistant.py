@@ -118,7 +118,25 @@ def test_example_flow_valid_for_publication() -> None:
     flow = _load_flow()
     # Не бросает: блоки/триггеры/кнопки в матрице v1, достижимость и детерминизм — ок.
     flow.validate_for_publication(ENGINE_V1_CAPABILITIES)
-    assert len(flow.nodes) == 28
+    assert len(flow.nodes) == 32
+
+
+def test_no_pii_collection_path_bypasses_consent() -> None:
+    # Структурный инвариант BR-008: в узлы сбора ПДн нельзя попасть мимо согласия.
+    flow = _load_flow()
+    pii_entry_nodes = {"req_ask_name", "dev_ask_message"}
+    trigger_targets = {t.target_node_id for t in flow.triggers}
+    assert trigger_targets & pii_entry_nodes == set()  # ни один триггер не ведёт в сбор ПДн
+    consent_holders = {
+        node.id for node in flow.nodes.values()
+        for b in node.buttons if b.target in pii_entry_nodes
+    }
+    # Кнопки в сбор ПДн — только с экранов согласия и пост-согласийных экранов правки.
+    assert consent_holders <= {"req_start", "req_summary", "dev_start", "dev_confirm"}
+    transition_sources = {
+        t.source_node_id for t in flow.transitions if t.target_node_id in pii_entry_nodes
+    }
+    assert transition_sources == set()  # и безусловных переходов в сбор ПДн нет
 
 
 # ── каркас ──────────────────────────────────────────────────────────────────
@@ -208,6 +226,8 @@ async def test_request_form_collects_and_confirms() -> None:
 
     await use_case.execute(_event(TriggerType.START))
     await use_case.execute(_click("req_start"))
+    assert "разрешаете" in port.sent[-1].text  # экран согласия на обработку ПДн (BR-008)
+    await use_case.execute(_click("req_ask_name"))  # «✅ Согласен — продолжить»
     for answer in ("Иван", "+70000000000", "Нужен бот-помощник", "2 недели", "не определён"):
         await use_case.execute(_event(TriggerType.TEXT, text=answer))
 
@@ -216,7 +236,7 @@ async def test_request_form_collects_and_confirms() -> None:
     assert "+70000000000" in summary
     assert "Нужен бот-помощник" in summary
 
-    await use_case.execute(_click("req_notify"))  # «✅ Подтвердить» -> notify -> финал
+    await use_case.execute(_click("req_notify"))  # «✅ Подтвердить» -> notify -> wipe -> финал
 
     admin_messages = [c for c in port.sent if c.external_chat_id == ADMIN_CHAT]
     assert len(admin_messages) == 1  # заявка реально доставлена админу (ADR-0010)
@@ -225,15 +245,20 @@ async def test_request_form_collects_and_confirms() -> None:
 
     done = port.sent[-1]
     assert done.external_chat_id == CHAT  # финал — пользователю
-    assert "Иван" in done.text  # {req_name} интерполировано в подтверждение
-    assert "+70000000000" in done.text  # {req_contact} интерполировано
+    assert "Готово" in done.text  # без ПДн: переменные стёрты сразу после доставки (BR-008)
+
+    # Повторный тап по протухшей «✅ Подтвердить»: данные стёрты -> guard не пускает,
+    # дубль заявки админу не уходит.
+    await use_case.execute(_click("req_notify"))
+    assert len([c for c in port.sent if c.external_chat_id == ADMIN_CHAT]) == 1
 
 
 async def test_developer_contact_delivers_message() -> None:
     use_case, port = await _engine()
 
     await use_case.execute(_event(TriggerType.START))
-    await use_case.execute(_click("dev_start"))
+    await use_case.execute(_click("dev_start"))  # экран согласия
+    await use_case.execute(_click("dev_ask_message"))  # «✅ Согласен — отправить вопрос»
     await use_case.execute(_event(TriggerType.TEXT, text="Нужна интеграция с CRM"))
     await use_case.execute(_event(TriggerType.TEXT, text="@roman"))
     await use_case.execute(_click("dev_notify"))  # «📨 Отправить»
@@ -262,6 +287,7 @@ async def test_confirm_survives_free_text_detour() -> None:
 
     await use_case.execute(_event(TriggerType.START))
     await use_case.execute(_click("req_start"))
+    await use_case.execute(_click("req_ask_name"))  # согласие дано
     for answer in ("Иван", "+70000000000", "Нужен бот", "2 недели", "не определён"):
         await use_case.execute(_event(TriggerType.TEXT, text=answer))
     await use_case.execute(_event(TriggerType.TEXT, text="да"))  # детур на подсказку
@@ -283,9 +309,50 @@ async def test_stale_confirm_without_data_restarts_form_not_empty_card() -> None
     await use_case.execute(_click("req_notify"))  # без заполнения формы
 
     assert [c for c in port.sent if c.external_chat_id == ADMIN_CHAT] == []
-    # Guard увёл на перезапуск формы: интро req_start и первый вопрос анкеты.
-    assert any("Оформим заявку" in c.text for c in port.sent)
-    assert "Как к вам обращаться?" in port.sent[-1].text
+    # Guard увёл на перезапуск формы: экран согласия (сбор ПДн — только после него).
+    assert "Оформим заявку" in port.sent[-1].text
+    assert "разрешаете" in port.sent[-1].text
+
+
+async def test_cancel_wipes_pii_and_blocks_stale_confirm() -> None:
+    # Must-fix роя: «Отменить» обязан стереть собранные ПДн, а протухшая
+    # «✅ Подтвердить» после отмены — НЕ отправить отменённую заявку админу.
+    use_case, port = await _engine()
+    await use_case.execute(_event(TriggerType.START))
+    await use_case.execute(_click("req_start"))
+    await use_case.execute(_click("req_ask_name"))  # согласие
+    for answer in ("Иван", "+70000000000", "Нужен бот", "не важно", "не определён"):
+        await use_case.execute(_event(TriggerType.TEXT, text=answer))
+
+    await use_case.execute(_click("req_wipe_cancel"))  # «⬅️ Отменить»
+    assert port.sent[-1].text == "Главное меню — чем помочь?"  # вернулись в меню
+
+    await use_case.execute(_click("req_notify"))  # протухшая «✅ Подтвердить»
+
+    assert [c for c in port.sent if c.external_chat_id == ADMIN_CHAT] == []  # отменённая заявка не ушла
+    assert "разрешаете" in port.sent[-1].text  # guard увёл на согласие/перезапуск
+
+
+async def test_stale_dev_confirm_without_data_restarts() -> None:
+    use_case, port = await _engine()
+    await use_case.execute(_event(TriggerType.START))
+
+    await use_case.execute(_click("dev_notify"))  # протухшая «📨 Отправить» без данных
+
+    assert [c for c in port.sent if c.external_chat_id == DEV_CHAT] == []
+    assert "разрешаете" in port.sent[-1].text  # dev-guard увёл на экран согласия
+
+
+async def test_crafted_callback_cannot_enter_pii_collection() -> None:
+    # Негативный пин согласия: callback с payload узла сбора ПДн игнорируется.
+    use_case, port = await _engine()
+    await use_case.execute(_event(TriggerType.START))
+    sent_before = len(port.sent)
+
+    await use_case.execute(_click("req_ask_name"))
+    await use_case.execute(_click("dev_ask_message"))
+
+    assert len(port.sent) == sent_before  # оба нажатия молча проигнорированы
 
 
 async def test_menu_screen_button_survives_detour() -> None:
