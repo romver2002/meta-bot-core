@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.1"
-updated: 2026-07-07
+version: "1.2"
+updated: 2026-07-10
 verified_commit: ""
 owner: ""
 ---
@@ -42,6 +42,9 @@ owner: ""
 |---|---|---|---|---|
 | `DATABASE_URL` | строка подключения к PostgreSQL 16 — хранилище `Bot`/`Flow`/`Session` (async SQLAlchemy) | local: `.env`; stage/prod: секрет-хранилище | **да** | `postgresql+asyncpg://meta_bot:***@localhost:5432/meta_bot` |
 | `REDIS_URL` | подключение к Redis 7 — runtime-состояние FSM (`Session`) и идемпотентность вебхуков | local: `.env`; stage/prod: секрет-хранилище | **да** (в prod содержит пароль) | `redis://localhost:6379/0` |
+| `SESSION_IDLE_TTL` | секунды без событий, после которых активная сессия просрочивается фоновой чисткой со стиранием переменных (BR-008) | local: `.env`; иначе: переменные CI/CD | нет | `3600` |
+| `SESSION_RETENTION_DAYS` | срок хранения завершённых/просроченных сессий; старше срока — строка удаляется целиком вместе с ПДн (BR-008, [ADR-0011](../decisions/0011-session-pii-retention.md)) | local: `.env`; иначе: переменные CI/CD | нет | `30` |
+| `SESSION_PURGE_INTERVAL` | интервал фоновой чистки сессий в секундах (composition root, lifespan) | local: `.env`; иначе: переменные CI/CD | нет | `3600` |
 | `ADMIN_API_SECRET` | секрет для подписи/проверки токенов доступа к admin API конструктора (`presentation/api/admin_routes.py`); механизм аутентификации (JWT/сессии) — уточнить у команды | local: `.env`; stage/prod: секрет-хранилище | **да** | `<случайная строка ≥ 32 байт>` |
 | `TOKEN_VAULT_URL` | адрес хранилища токенов ботов (token vault) за `TokenVaultPort`; имя условно, зависит от выбранного хранилища — уточнить у команды | local: `.env`; stage/prod: переменные CI/CD | нет | `https://vault.example.internal:8200` |
 | `TOKEN_VAULT_TOKEN` | учётные данные доступа приложения к token vault; имя условно — уточнить у команды | local: `.env`; stage/prod: секрет-хранилище | **да** | `<токен доступа к vault>` |

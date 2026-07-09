@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.12"
+version: "1.13"
 updated: 2026-07-10
 verified_commit: ""
 owner: ""
@@ -26,14 +26,16 @@ owner: ""
 - 2026-07-09 — блок `http_request` (звонок в любой HTTP-API, `{{secret:*}}` за портом) + секреты подключения за портом; AI-ответ через OpenRouter выражается ДАННЫМИ Flow, без бото-специфики в ядре.
 - 2026-07-09 — первый бот «умный помощник по заявкам» как Flow-данные ([examples/first-bot-request-assistant/](../../examples/first-bot-request-assistant/)): каркас + живой AI-ответ (OpenRouter) + форма; live-smoke в Telegram пройден (навигация/меню вживую). Движковый must-fix остаточной `http_request`-переменной (null-content → прошлый ответ) починен + регресс-тест.
 - 2026-07-10 — блок `notify` (ADR-0010 proposed): доставка третьему лицу по символической роли за портом `NotificationTargetResolverPort`, best-effort; `PUT /notifications/{role}`; пример first-bot реально доставляет заявку админу/разработчику + catch-all подсказка. Рой-ревью (55 агентов): 2 must-fix починены (resolve вне try; мёртвые кнопки после catch-all-детура → guard-триггеры в данных), антиспуфинг карточки, атомарный общий JSON-store.
+- 2026-07-10 — `BotPlatformPort.answer_callback` + `IncomingEvent.callback_id`: движок best-effort подтверждает каждое нажатие до guard'ов (гасит спиннер даже у бота на паузе); TG `answerCallbackQuery` (id в теле, скраб токена в ошибках) / MAX `POST /answers` (id в query) — различия только в адаптерах; MockTransport-контракты в тестах.
+- 2026-07-10 — **BR-008 / ADR-0011, ПДн по закону**: завершение/просрочка сессии стирает `variables` (домен); фоновая чистка (`PurgeExpiredSessionsUseCase` за `SessionRetentionPort`) просрочивает зависшие FSM и удаляет завершённые сессии старше `SESSION_RETENTION_DAYS` целиком; в примере first-bot — экраны согласия перед сбором ПДн.
 - 2026-07-10 — `frontend/constructor/`: кнопочные переходы видны на холсте (синхронизированы с `Button.target`),
-  безопасный путь публикации (скрытые bot_id/row_version, лок платформы, проверка Mini App), палитра = Engine v1 включая `notify`; адаптивные связи можно изгибать и переподключать по цели без изменения Flow-данных; `npm test` (4) и build зелёные.
+  безопасный путь публикации (скрытые bot_id/row_version, лок платформы, проверка Mini App), палитра = Engine v1 включая `notify`; адаптивные связи и групповое выделение/копирование/удаление не меняют Flow-данные; `npm test` (7) и build зелёные.
 
 ## В работе
 
 <!-- Начато, но не завершено; в каком состоянии оставлено и что дальше. -->
 
-- 2026-07-08 — ратификация ADR [0003](../decisions/0003-flow-engine-blocks-and-sandbox.md)–[0010](../decisions/0010-notify-block-and-notification-targets.md)
+- 2026-07-08 — ратификация ADR [0003](../decisions/0003-flow-engine-blocks-and-sandbox.md)–[0011](../decisions/0011-session-pii-retention.md)
   (proposed, ждут команды). Следом — редактор ↔ Admin API, песочница custom_code.
 - 2026-07-10 — read-контракт черновика и восстановление layout в редакторе:
   без него нельзя безопасно открыть и продолжить редактирование существующего Flow.
@@ -57,8 +59,6 @@ owner: ""
 
 - 2026-07-08 — канон портов ([overview](../architecture/overview.md)) не содержит порты Admin API/webhook/mini
   app/http/notify (`BotRepository`, `IdempotencyPort`, `HttpClientPort`, `SecretResolverPort`, `NotificationTargetResolverPort`, UC) — внести при ратификации ADR-0008/0009/0010.
-- 2026-07-09 — `session.variables` (PII формы) — durable в Postgres JSONB без
-  ретеншена/согласия, не «эфемерно в Redis»; нужен эрейзер завершённых сессий + согласие.
 
 ## Технический долг
 
@@ -73,8 +73,9 @@ owner: ""
   (3) `session.flow_version_id/current_node_id` nullable вопреки design.md §1 (черновая сессия до первого шага).
 - 2026-07-08 — перед релизом MAX сверить живым запросом 6 пунктов «требует проверки»
   из `specs/002-platform-deep-dive/report.md` §6 (`update_types`, 429, `callback_id`, `requestContact`, TTL initData).
-- 2026-07-10 — `__cause__` ApplicationError адаптера TG содержит URL с bot-token
-  (httpx-исключение): санировать при введении логирования; до того цепочку не логировать.
+- 2026-07-10 — TG-адаптер уже скрабит токен и рвёт цепочку исключений; MAX-адаптер
+  чейнит httpx-ошибку (`from exc`) — request в `__cause__` держит Authorization-заголовок:
+  не логировать цепочку с интроспекцией request до аналогичного скраба.
 
 ---
 

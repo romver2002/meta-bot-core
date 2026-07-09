@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 from domain.bot.entities import Bot, MiniApp
 from domain.bot.value_objects import Token
@@ -107,6 +108,7 @@ def session_to_model(session: Session) -> SessionModel:
         variables=dict(session.variables),
         awaiting_variable=session.awaiting_variable,
         status=session.status,
+        last_event_at=datetime.now(tz=UTC),  # каждый save = обработанное событие (критерий idle, BR-008)
     )
 
 
@@ -116,6 +118,7 @@ def apply_session_to_model(session: Session, model: SessionModel) -> None:
     model.variables = dict(session.variables)
     model.awaiting_variable = session.awaiting_variable
     model.status = session.status
+    model.last_event_at = datetime.now(tz=UTC)  # каждый save = обработанное событие (критерий idle, BR-008)
 
 
 def model_to_session(model: SessionModel) -> Session:

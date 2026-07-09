@@ -155,12 +155,12 @@ async def test_answer_flows_through_condition_true_branch() -> None:
 
     await use_case.execute(_event(TriggerType.TEXT, text="Роман"))
 
-    assert port.sent[-1].text == "Добро пожаловать, Роман!"
+    assert port.sent[-1].text == "Добро пожаловать, Роман!"  # переменная отработала в рендере
     # Цепочка дошла до конца: сессия завершена, пара (Bot, user) свободна.
     assert await sessions.get_active(BOT_ID, USER) is None
     stored = sessions.storage[(BOT_ID, USER)]
     assert stored.status is SessionStatus.COMPLETED
-    assert stored.variables == {"name": "Роман"}
+    assert stored.variables == {}  # BR-008: ПДн стёрты вместе с завершением сессии
     assert stored.awaiting_variable is None
 
 
@@ -184,8 +184,8 @@ async def test_show_buttons_waits_then_next_button_continues() -> None:
     await use_case.execute(_event(TriggerType.CALLBACK, payload="finish"))
 
     stored = sessions.storage[(BOT_ID, USER)]
-    assert stored.variables == {"finished": "yes"}  # save исполнился
     assert stored.status is SessionStatus.COMPLETED  # bye — конец цепочки
+    assert stored.variables == {}  # BR-008: переменные не переживают завершение
     assert port.sent[-1].text == "Готово, ."  # bye после save
 
 
@@ -353,6 +353,29 @@ async def test_cyclic_flow_hits_step_limit() -> None:
 
     with pytest.raises(FlowExecutionError, match="лимит"):
         await use_case.execute(_event(TriggerType.START))
+
+
+async def test_save_values_map_sets_and_wipes_many_variables() -> None:
+    """Save с values-маппингом (каталог блоков): несколько переменных одним узлом."""
+    flow = Flow(
+        id="flow-multisave",
+        name="Мульти-save",
+        nodes={
+            "seed": Node(id="seed", type=NodeType.SAVE, params={"values": {"a": "1", "b": "2"}}),
+            "wipe": Node(id="wipe", type=NodeType.SAVE, params={"values": {"a": "", "b": ""}}),
+            "done": Node(id="done", type=NodeType.SEND_MESSAGE, params={"text": "a={a} b={b}"}),
+        },
+        triggers=(Trigger(id="t", type=TriggerType.START, target_node_id="seed"),),
+        transitions=(
+            Transition(source_node_id="seed", target_node_id="wipe"),
+            Transition(source_node_id="wipe", target_node_id="done"),
+        ),
+    )
+    use_case, port, _ = await _engine(flow)
+
+    await use_case.execute(_event(TriggerType.START))
+
+    assert port.sent[-1].text == "a= b="  # обе переменные затёрты одним узлом
 
 
 # ── подтверждение нажатия (answer_callback) ──────────────────────────────────

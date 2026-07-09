@@ -14,6 +14,7 @@ per-объектных полей: ``message.body.mid`` для сообщени�
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Mapping
 from typing import Any, cast
 
@@ -23,8 +24,13 @@ from domain.flow.value_objects import TriggerType
 
 
 def _composite_key(update_type: str, *parts: object) -> str:
-    """Резервный ключ идемпотентности, когда нет mid/callback_id."""
-    return ":".join([update_type, *(str(p) for p in parts if p is not None)])
+    """Резервный ключ идемпотентности, когда нет mid/callback_id.
+
+    Части (timestamp, user_id — ПДн) хэшируются: ключ попадает в Redis,
+    а внешние идентификаторы пользователей в хранилищах не светим (BR-008).
+    """
+    raw = ":".join(str(p) for p in parts if p is not None)
+    return f"{update_type}:{hashlib.sha256(raw.encode()).hexdigest()[:32]}"
 
 
 def parse_max_update(bot_id: str, payload: Mapping[str, object]) -> IncomingEvent | None:

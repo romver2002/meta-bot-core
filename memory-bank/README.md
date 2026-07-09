@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.4"
+version: "1.5"
 updated: 2026-07-10
 verified_commit: ""
 owner: "teamlead"
@@ -74,6 +74,7 @@ owner: "teamlead"
 - [0008-persistence-model.md](decisions/0008-persistence-model.md) — модель хранения: версии Flow в JSONB, Session в PG+Redis (proposed)
 - [0009-max-adapter-thin-client.md](decisions/0009-max-adapter-thin-client.md) — MaxBotAdapter: тонкий httpx-клиент вместо SDK maxapi (proposed)
 - [0010-notify-block-and-notification-targets.md](decisions/0010-notify-block-and-notification-targets.md) — блок notify + адресаты уведомлений (роль → chat_id) (proposed)
+- [0011-session-pii-retention.md](decisions/0011-session-pii-retention.md) — ретеншен и стирание ПДн сессий (BR-008) (proposed)
 
 ### workflows/ — процессы под тип задачи (стабильный)
 - [new-feature.md](workflows/new-feature.md) — процесс новой фичи (включая связку со spec-kit)

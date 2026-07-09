@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
@@ -23,6 +25,7 @@ from application.use_cases.create_bot import CreateBotUseCase
 from application.use_cases.get_bot import GetBotUseCase
 from application.use_cases.process_update import ProcessUpdateUseCase
 from application.use_cases.publish_bot import PublishBotUseCase
+from application.use_cases.purge_expired_sessions import PurgeExpiredSessionsUseCase
 from application.use_cases.save_flow_draft import SaveFlowDraftUseCase
 from application.use_cases.set_connection_secret import SetConnectionSecretUseCase
 from application.use_cases.set_notification_target import SetNotificationTargetUseCase
@@ -37,6 +40,7 @@ from infrastructure.integrations.health_checks import (
     InfraHealthServiceProbe,
     SettingsHealthServiceRegistry,
 )
+from infrastructure.maintenance.session_purge import run_periodic_purge
 from infrastructure.platforms.factory import RegistryPlatformFactory
 from infrastructure.platforms.max.adapter import MaxBotAdapter
 from infrastructure.platforms.telegram.adapter import TelegramBotAdapter
@@ -70,9 +74,15 @@ MSK = timezone(timedelta(hours=3))
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.startup_time_service = datetime.now(tz=MSK)
+    purge_task = asyncio.create_task(
+        run_periodic_purge(app.state.purge_sessions, app.state.settings.session_purge_interval)
+    )
     try:
         yield
     finally:
+        purge_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await purge_task
         await app.state.http_client.aclose()
         await app.state.engine.dispose()
 
@@ -116,6 +126,11 @@ def create_app() -> FastAPI:
     app.state.settings = settings
     app.state.engine = engine
     app.state.http_client = http_client
+    app.state.purge_sessions = PurgeExpiredSessionsUseCase(
+        sessions,
+        idle_ttl_seconds=settings.session_idle_ttl,
+        retention_seconds=settings.session_retention_days * 86400,
+    )
 
     app.include_router(health, prefix="/healthchecks", tags=["Состояние"])
     app.include_router(admin, prefix="/api", tags=["Конструктор"])

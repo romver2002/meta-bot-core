@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://metabot:metabot@localhost:5433/metabot"
     redis_url: str = "redis://localhost:6379/0"
     session_idle_ttl: int = 3600
+    # Ретеншен ПДн сессий (BR-008, ADR-0011): срок хранения завершённых/просроченных
+    # сессий и интервал фоновой чистки (секунды).
+    session_retention_days: int = 30
+    session_purge_interval: int = 3600
     webhook_idempotency_ttl: int = 86400
     webhook_secret: str | None = None  # сверяется с X-*-Secret заголовком платформы
     # Пути к dev-хранилищам секретов (сами пути — не секрет; прод — открытый вопрос).

@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.24"
+version: "1.25"
 updated: 2026-07-10
 verified_commit: ""
 owner: ""
@@ -42,14 +42,14 @@ owner: ""
 - 2026-07-08 — Живой контур: адаптеры Telegram/MAX (ADR-0009, тонкий httpx), webhook с идемпотентностью Redis, Admin API (create/flow/publish/get), Flow Engine подключён в composition root. Гейт: 84 теста (в т.ч. e2e золотого пути и живой смоук на PG), mypy 72 файла, 6/6 контрактов
 - 2026-07-08 — Глубокое сравнение TG/MAX (рой, 55 агентов, 594 обращения к докам): отчёт specs/002-platform-deep-dive (38 confirmed/6 uncertain/2 refuted). Исправлено: ключ идемпотентности MaxBotAdapter на mid/callback_id; 2 ошибки в platform-reference (init data HMAC одинаков; у MAX нет платежей) + числа; чек-лист требует-проверки в progress
 - 2026-07-08 — Валидация init data mini app (BR-007): общее HMAC-ядро webapp_signature (TG/MAX идентичны, из specs/002), per-platform обёртки, BotPlatformPort.validate_init_data, AuthenticateMiniAppUseCase, эндпоинт POST /api/bots/{id}/miniapp/auth. Гейт: 99 тестов (криптовекторы, срок, подделка, e2e через реальный адаптер) + живой смоук на контейнере (200/401/401).
-- 2026-07-08 — BR-007 mini app auth: общий identity_from_init_data для Telegram/MAX адаптеров; signed init data без пригодного user.id теперь отклоняется, дублирование парсинга MiniAppIdentity снято, BotPlatformPort и границы слоёв не менялись.
 - 2026-07-08 — Лоуп mini app: блок open_mini_app (движок шлёт кнопку запуска web_app/open_app и ждёт), триггер mini_app_result (эндпоинт результата -> движок продолжает сценарий), AttachMiniAppUseCase + эндпоинт привязки. CapabilityMatrix v1 расширена. Гейт: 117 unit, mypy 79, 6/6 контрактов.
 - 2026-07-09 — первый бот 'умный помощник по заявкам' собран как Flow-данные (examples/), live-smoke пройден в Telegram (меню/навигация вживую); must-fix остаточной http_request-переменной (null-content → прошлый ответ) починен + регресс-тест
 - 2026-07-09 — Актуализирован frontend/constructor по текущему Flow Engine/API конструктора: ruflo-аудит контракта, Engine v1 catalog без active custom_code, trigger.config, http_request JSON body/headers/response_map + error outcome, button targets, панель «Боты и публикация» (create/save row_version/publish/miniapp/secrets), стартовый шаблон умного помощника; npm build зелёный.
 - 2026-07-09 — Исправлен UX frontend/constructor после замечаний: закрываемые палитра и правая панель, вкладки Настройки/Публикация, раскрываемые секции формы публикации, drawer-поведение на узких экранах, автопоказ настроек при добавлении/выборе блока; npm build зелёный.
 - 2026-07-10 — Блок `notify` (ADR-0010 proposed): доставка третьему лицу по символической роли через `NotificationTargetResolverPort` + `BotPlatformPort.send_message`, best-effort (сбой резолва/доставки не рвёт цепочку); `PUT /api/bots/{id}/notifications/{role}`; пример first-bot реально доставляет заявку админу/разработчику + catch-all подсказка. Рой-ревью 55 агентов: 2 must-fix починены (resolve вне try; мёртвые кнопки после детура → guard-триггеры), антиспуфинг карточки, атомарный JSON-store.
 - 2026-07-10 — `BotPlatformPort.answer_callback` + `IncomingEvent.callback_id`: движок best-effort подтверждает каждое нажатие до маршрутизации (гасит спиннер и у протухших кнопок); TG `answerCallbackQuery` (id в теле) / MAX `POST /answers` (id в query) — различия только в адаптерах; контракты закреплены MockTransport-тестами.
-- 2026-07-10 — В конструкторе добавлены адаптивные связи: перетаскиваемый изгиб, читаемые плашки и безопасное переподключение цели.
+- 2026-07-10 — **BR-008/ADR-0011 (ПДн по закону)**: стирание переменных при завершении/просрочке; фоновая чистка (`SessionRetentionPort`, наблюдаемый цикл в `infrastructure/maintenance`); согласие + save-узлы-стиратели в примере (отмена стирает ПДн, дубль заявки блокируется guard'ом); MAX-ключи идемпотентности хэшируются; критерий простоя — `last_event_at`. Рой: 38 агентов, 11 подтверждённых находок вложено (включая must-fix «Отменить не стирает ПДн»).
+- 2026-07-10 — Конструктор: адаптивные связи и рамка/Ctrl/⌘-выделение, групповое перемещение, безопасные Ctrl/⌘+C/V и массовое удаление блоков.
 
 ## Следующие шаги
 

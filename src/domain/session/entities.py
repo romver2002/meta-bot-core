@@ -69,13 +69,20 @@ class Session:
         self.variables[key] = value
 
     def complete(self) -> None:
-        """Сценарий дошёл до конца: сессия завершена, пара (Bot, user) свободна."""
+        """Сценарий дошёл до конца: сессия завершена, пара (Bot, user) свободна.
+
+        Переменные стираются (BR-008, минимизация ПДн): данные сценария живут
+        не дольше самой сессии — все сайд-эффекты (ответы, уведомления) уже
+        выполнены к моменту завершения.
+        """
         self.awaiting_variable = None
+        self.variables.clear()
         self.status = SessionStatus.COMPLETED
 
     def expire(self) -> None:
-        """Вытеснение по TTL/решению оператора."""
+        """Вытеснение по TTL/решению оператора. Переменные стираются (BR-008)."""
         self.awaiting_variable = None
+        self.variables.clear()
         self.status = SessionStatus.EXPIRED
 
     def _ensure_active(self) -> None:

@@ -1,5 +1,7 @@
 """Парсеры update платформ -> IncomingEvent (чистые функции адаптеров)."""
 
+import hashlib
+
 import pytest
 
 from domain.bot.value_objects import Platform
@@ -64,8 +66,9 @@ def test_max_bot_started() -> None:
     assert event is not None
     assert (event.platform, event.event_type) == (Platform.MAX, TriggerType.START)
     assert (event.external_user_id, event.external_chat_id) == ("5", "55")
-    # Нет per-update id → составной ключ идемпотентности.
-    assert event.update_id == "bot_started:1000:5"
+    # Нет per-update id → составной ключ; части хэшируются: user_id (ПДн)
+    # не должен попадать в ключи Redis (BR-008).
+    assert event.update_id == "bot_started:" + hashlib.sha256(b"1000:5").hexdigest()[:32]
 
 
 def test_max_message_uses_mid_as_idempotency_key() -> None:
@@ -101,7 +104,7 @@ def test_max_message_without_mid_falls_back_to_composite() -> None:
         },
     )
     assert event is not None
-    assert event.update_id == "message_created:2001:7"
+    assert event.update_id == "message_created:" + hashlib.sha256(b"2001:7").hexdigest()[:32]
 
 
 def test_max_callback_uses_callback_id() -> None:

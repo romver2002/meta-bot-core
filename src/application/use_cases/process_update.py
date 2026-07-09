@@ -307,10 +307,17 @@ class ProcessUpdateUseCase:
                 outcome = evaluate_condition(str(node.params.get("expression", "")), session.variables)
                 node_id = self._transition_target(flow, node.id, "true" if outcome else "false")
             elif node.type is NodeType.SAVE:
-                session.remember(
-                    str(node.params.get("key", "")),
-                    render_text(str(node.params.get("value", "")), session.variables),
-                )
+                values = node.params.get("values")
+                if isinstance(values, dict):
+                    # Маппинг из каталога блоков: несколько переменных одним узлом
+                    # (в т.ч. стирание ПДн пустыми значениями, BR-008).
+                    for key, value in values.items():
+                        session.remember(str(key), render_text(str(value), session.variables))
+                else:
+                    session.remember(
+                        str(node.params.get("key", "")),
+                        render_text(str(node.params.get("value", "")), session.variables),
+                    )
                 node_id = self._transition_target(flow, node.id, "next")
             else:
                 raise FlowExecutionError(f"Блок {node.type} ещё не поддерживается движком (отклоняется BR-006)")

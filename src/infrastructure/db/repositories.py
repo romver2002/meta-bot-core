@@ -7,7 +7,9 @@
 
 from __future__ import annotations
 
+import datetime
 import uuid
+from typing import cast
 
 import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
@@ -253,3 +255,40 @@ class PgSessionRepository:
             raise ConcurrencyError(
                 f"Активная Session уже существует (bot={session.bot_id}, session={session.id})"
             ) from exc
+
+    # ── ретеншен ПДн (BR-008, SessionRetentionPort) ──────────────────────────
+
+    async def expire_idle(self, cutoff: datetime.datetime) -> int:
+        """Активные сессии без событий с cutoff -> expired, переменные стёрты.
+
+        Семантика стирания — зеркало доменного ``Session.expire()`` (канон);
+        критерий простоя — ``last_event_at`` (мапперы штампуют его на каждый
+        обработанный event), fallback ``updated_at`` для строк до BR-008.
+        """
+        async with self._session_factory() as db, db.begin():
+            result = cast(
+                "sa.CursorResult[object]",
+                await db.execute(
+                    sa.update(SessionModel)
+                    .where(
+                        SessionModel.status == SessionStatus.ACTIVE,
+                        sa.func.coalesce(SessionModel.last_event_at, SessionModel.updated_at) < cutoff,
+                    )
+                    .values(status=SessionStatus.EXPIRED, variables={}, awaiting_variable=None)
+                ),
+            )
+            return int(result.rowcount or 0)
+
+    async def delete_finished_before(self, cutoff: datetime.datetime) -> int:
+        """Стирает завершённые/просроченные сессии старше срока хранения целиком."""
+        async with self._session_factory() as db, db.begin():
+            result = cast(
+                "sa.CursorResult[object]",
+                await db.execute(
+                    sa.delete(SessionModel).where(
+                        SessionModel.status != SessionStatus.ACTIVE,
+                        SessionModel.updated_at < cutoff,
+                    )
+                ),
+            )
+            return int(result.rowcount or 0)

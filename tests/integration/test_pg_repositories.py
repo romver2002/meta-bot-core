@@ -132,3 +132,53 @@ async def test_session_single_active_per_user_and_completion(session_factory) ->
     refreshed = await repo.get_active(bot_id, user)
     assert refreshed is not None
     assert refreshed.id == fresh.id
+
+
+async def test_session_retention_expires_idle_and_deletes_finished(session_factory) -> None:
+    """Ретеншен ПДн (BR-008): зависшие FSM просрочиваются со стиранием переменных,
+    завершённые старше срока хранения удаляются целиком (вместе с user/chat id).
+    """
+    import datetime as dt
+
+    import sqlalchemy as sa
+
+    from infrastructure.db.models import SessionModel
+
+    repo = PgSessionRepository(session_factory)
+    bot_id = _uid()
+    now = dt.datetime.now(dt.UTC)
+
+    idle = Session(id=_uid(), bot_id=bot_id, external_user_id="u-idle")
+    idle.remember("req_contact", "+70000000000")  # ПДн, которые обязаны стереться
+    await repo.save(idle)
+    finished = Session(id=_uid(), bot_id=bot_id, external_user_id="u-done")
+    finished.complete()
+    await repo.save(finished)
+    fresh = Session(id=_uid(), bot_id=bot_id, external_user_id="u-fresh")
+    await repo.save(fresh)
+
+    # Состариваем idle и finished: last_event_at — критерий простоя (штампуется
+    # мапперами на каждый save), updated_at — критерий срока хранения.
+    async with session_factory() as db, db.begin():
+        await db.execute(
+            sa.update(SessionModel)
+            .where(SessionModel.id.in_([uuid.UUID(idle.id), uuid.UUID(finished.id)]))
+            .values(
+                updated_at=now - dt.timedelta(days=40),
+                last_event_at=now - dt.timedelta(days=40),
+            )
+        )
+
+    assert await repo.expire_idle(now - dt.timedelta(hours=1)) == 1  # fresh не тронут
+    assert await repo.get_active(bot_id, "u-idle") is None  # пара (Bot, user) освобождена
+    async with session_factory() as db:
+        idle_model = await db.get(SessionModel, uuid.UUID(idle.id))
+        assert idle_model is not None
+        assert idle_model.variables == {}  # ПДн стёрты немедленно, не дожидаясь удаления
+
+    assert await repo.delete_finished_before(now - dt.timedelta(days=30)) == 1
+    async with session_factory() as db:
+        assert await db.get(SessionModel, uuid.UUID(finished.id)) is None  # строка стёрта целиком
+        # Свежепросроченная idle-сессия ждёт свой срок хранения (уже без переменных).
+        assert await db.get(SessionModel, uuid.UUID(idle.id)) is not None
+        assert await db.get(SessionModel, uuid.UUID(fresh.id)) is not None
