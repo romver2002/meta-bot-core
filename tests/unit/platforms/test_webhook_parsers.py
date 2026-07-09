@@ -22,6 +22,7 @@ def test_telegram_text_message() -> None:
     assert (event.external_user_id, event.external_chat_id) == ("42", "4242")
     assert event.text == "привет"
     assert event.update_id == "7"
+    assert event.callback_id is None  # текст — не нажатие: подтверждать нечего
 
 
 def test_telegram_start_command() -> None:
@@ -38,6 +39,7 @@ def test_telegram_callback() -> None:
         {
             "update_id": 9,
             "callback_query": {
+                "id": "cbq-1",
                 "from": {"id": 42},
                 "data": "finish",
                 "message": {"chat": {"id": 4242}},
@@ -48,6 +50,7 @@ def test_telegram_callback() -> None:
     assert event.event_type is TriggerType.CALLBACK
     assert event.payload == "finish"
     assert event.external_chat_id == "4242"
+    assert event.callback_id == "cbq-1"  # для answerCallbackQuery (гасит спиннер)
 
 
 def test_telegram_unsupported_update_ignored() -> None:
@@ -80,6 +83,7 @@ def test_max_message_uses_mid_as_idempotency_key() -> None:
     assert event.event_type is TriggerType.TEXT
     assert event.text == "меню"
     assert event.update_id == "mid-abc"  # стабилен между ретраями доставки
+    assert event.callback_id is None  # текст — не нажатие: подтверждать нечего
 
     payload["message"]["body"]["text"] = "/start"  # type: ignore[index]
     started = parse_max_update(BOT, payload)
@@ -114,6 +118,7 @@ def test_max_callback_uses_callback_id() -> None:
     assert event.event_type is TriggerType.CALLBACK
     assert event.payload == "finish"
     assert event.update_id == "cb-xyz"
+    assert event.callback_id == "cb-xyz"  # для POST /answers (defensive-политика)
 
 
 def test_max_unsupported_update_ignored() -> None:

@@ -7,7 +7,7 @@ import itertools
 import pytest
 
 from application.errors import ApplicationError, FlowExecutionError
-from application.ports.bot_platform import SendMessageCommand
+from application.ports.bot_platform import AnswerCallbackCommand, SendMessageCommand
 from application.ports.http_client import HttpResponse
 from application.use_cases.process_update import ProcessUpdateUseCase
 from domain.bot.entities import MiniApp
@@ -80,7 +80,13 @@ def _flow() -> Flow:
     )
 
 
-def _event(event_type: TriggerType, *, text: str | None = None, payload: str | None = None) -> IncomingEvent:
+def _event(
+    event_type: TriggerType,
+    *,
+    text: str | None = None,
+    payload: str | None = None,
+    callback_id: str | None = None,
+) -> IncomingEvent:
     return IncomingEvent(
         platform=Platform.TELEGRAM,
         bot_id=BOT_ID,
@@ -89,6 +95,7 @@ def _event(event_type: TriggerType, *, text: str | None = None, payload: str | N
         event_type=event_type,
         text=text,
         payload=payload,
+        callback_id=callback_id,
     )
 
 
@@ -346,6 +353,68 @@ async def test_cyclic_flow_hits_step_limit() -> None:
 
     with pytest.raises(FlowExecutionError, match="лимит"):
         await use_case.execute(_event(TriggerType.START))
+
+
+# ── подтверждение нажатия (answer_callback) ──────────────────────────────────
+
+
+async def test_regular_click_is_acknowledged_once_and_scenario_runs() -> None:
+    use_case, port, _ = await _engine(_flow())
+    await use_case.execute(_event(TriggerType.TEXT, text="меню"))  # show_buttons ждёт нажатия
+
+    await use_case.execute(_event(TriggerType.CALLBACK, payload="finish", callback_id="cbq-1"))
+
+    assert [c.callback_id for c in port.answered] == ["cbq-1"]  # ровно один ack
+    assert port.answered[0].bot_token == "fake-token"  # в команду ушёл секрет из vault, не vault_ref
+    assert port.sent[-1].text == "Готово, ."  # ack и сценарий сосуществуют
+
+
+async def test_callback_is_acknowledged_even_when_unrecognized() -> None:
+    use_case, port, _ = await _engine(_flow())
+    await use_case.execute(_event(TriggerType.START))
+    sent_before = len(port.sent)
+
+    # Протухшая кнопка: payload никуда не матчится, но спиннер обязан погаснуть.
+    await use_case.execute(_event(TriggerType.CALLBACK, payload="ghost", callback_id="cbq-9"))
+
+    assert [c.callback_id for c in port.answered] == ["cbq-9"]
+    assert len(port.sent) == sent_before  # маршрутизация нажатие проигнорировала
+
+
+async def test_callback_on_paused_bot_is_still_acknowledged() -> None:
+    # Пауза — главный источник протухших кнопок: бот молчит, но спиннер гасим.
+    use_case, port, _ = await _engine(_flow(), bot_status=BotStatus.DRAFT)
+
+    await use_case.execute(_event(TriggerType.CALLBACK, payload="finish", callback_id="cbq-5"))
+
+    assert [c.callback_id for c in port.answered] == ["cbq-5"]
+    assert port.sent == []  # сценарий не исполняется
+
+
+async def test_event_without_callback_id_is_not_acknowledged() -> None:
+    use_case, port, _ = await _engine(_flow())
+
+    await use_case.execute(_event(TriggerType.TEXT, text="меню"))  # текст — не нажатие
+
+    assert port.answered == []
+
+
+class _AckFailingPlatform(StubPlatform):
+    """Подтверждение колбэка падает; доставка сообщений работает."""
+
+    async def answer_callback(self, command: AnswerCallbackCommand) -> None:
+        raise ApplicationError("ack не принят")
+
+
+async def test_ack_failure_does_not_break_scenario() -> None:
+    use_case, port, _ = await _engine(
+        _flow(), platform_port=_AckFailingPlatform(full_capabilities())
+    )
+    await use_case.execute(_event(TriggerType.TEXT, text="меню"))  # show_buttons «Куда дальше?»
+
+    await use_case.execute(_event(TriggerType.CALLBACK, payload="finish", callback_id="cbq-1"))
+
+    assert port.sent[-1].text == "Готово, ."  # цепочка исполнилась несмотря на сбой ack
 
 
 # ── блок notify (ADR-0010) ───────────────────────────────────────────────────

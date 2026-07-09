@@ -34,6 +34,7 @@ def parse_telegram_update(bot_id: str, payload: Mapping[str, object]) -> Incomin
     if callback is not None:
         origin = cast("dict[str, Any]", callback.get("message") or {})
         chat = cast("dict[str, Any]", origin.get("chat") or {})
+        callback_id = callback.get("id")
         return IncomingEvent(
             platform=Platform.TELEGRAM,
             bot_id=bot_id,
@@ -42,6 +43,7 @@ def parse_telegram_update(bot_id: str, payload: Mapping[str, object]) -> Incomin
             event_type=TriggerType.CALLBACK,
             payload=str(callback.get("data", "")),
             update_id=update_id,
+            callback_id=str(callback_id) if callback_id is not None else None,
         )
 
     return None  # прочие типы update конструктором пока не поддерживаются

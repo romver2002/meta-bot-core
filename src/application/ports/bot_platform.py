@@ -34,6 +34,18 @@ class SendMessageCommand:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class AnswerCallbackCommand:
+    """Подтверждение нажатия кнопки (гасит индикатор ожидания у пользователя).
+
+    ``callback_id`` транзиентен — отвечать сразу; повторный ответ платформы
+    трактуют идемпотентно (specs/002-platform-deep-dive, «Ответ на нажатие»).
+    """
+
+    bot_token: str
+    callback_id: str
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class MiniAppIdentity:
     """Доверенная личность пользователя mini app после валидации init data (BR-007)."""
 
@@ -57,6 +69,14 @@ class BotPlatformPort(Protocol):
 
         :raises ApplicationError: реализация оборачивает сетевые сбои
             в свои ошибки; доменных ошибок здесь не бывает.
+        """
+        ...
+
+    async def answer_callback(self, command: AnswerCallbackCommand) -> None:
+        """Подтверждает нажатие кнопки (TG answerCallbackQuery / MAX /answers).
+
+        :raises ApplicationError: сетевой сбой; вызывающий обязан пережить его
+            best-effort — подтверждение не важнее исполнения сценария.
         """
         ...
 

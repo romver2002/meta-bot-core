@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.23"
+version: "1.24"
 updated: 2026-07-10
 verified_commit: ""
 owner: ""
@@ -48,10 +48,8 @@ owner: ""
 - 2026-07-09 — Актуализирован frontend/constructor по текущему Flow Engine/API конструктора: ruflo-аудит контракта, Engine v1 catalog без active custom_code, trigger.config, http_request JSON body/headers/response_map + error outcome, button targets, панель «Боты и публикация» (create/save row_version/publish/miniapp/secrets), стартовый шаблон умного помощника; npm build зелёный.
 - 2026-07-09 — Исправлен UX frontend/constructor после замечаний: закрываемые палитра и правая панель, вкладки Настройки/Публикация, раскрываемые секции формы публикации, drawer-поведение на узких экранах, автопоказ настроек при добавлении/выборе блока; npm build зелёный.
 - 2026-07-10 — Блок `notify` (ADR-0010 proposed): доставка третьему лицу по символической роли через `NotificationTargetResolverPort` + `BotPlatformPort.send_message`, best-effort (сбой резолва/доставки не рвёт цепочку); `PUT /api/bots/{id}/notifications/{role}`; пример first-bot реально доставляет заявку админу/разработчику + catch-all подсказка. Рой-ревью 55 агентов: 2 must-fix починены (resolve вне try; мёртвые кнопки после детура → guard-триггеры), антиспуфинг карточки, атомарный JSON-store.
-- 2026-07-10 — фронтенд-конструктор: нейтральная стартовая схема, видимые
-  переходы кнопок (`Button.target`), безопасная публикация и пред-проверка Mini
-  App; валидация/сериализация не выполняются при перетаскивании. `npm test` (4)
-  и `npm run build` зелёные.
+- 2026-07-10 — `BotPlatformPort.answer_callback` + `IncomingEvent.callback_id`: движок best-effort подтверждает каждое нажатие до маршрутизации (гасит спиннер и у протухших кнопок); TG `answerCallbackQuery` (id в теле) / MAX `POST /answers` (id в query) — различия только в адаптерах; контракты закреплены MockTransport-тестами.
+- 2026-07-10 — В конструкторе добавлены адаптивные связи: перетаскиваемый изгиб, читаемые плашки и безопасное переподключение цели.
 
 ## Следующие шаги
 
@@ -65,7 +63,9 @@ owner: ""
   `Authorization`, не в query); старый хост не поддерживаем. Внешний дедлайн
   платформы 2026-07-19 нас не блокирует — стартуем уже на v2.
 - 2026-07-08 — ADR-0007 вынести на ратификацию; при accepted — внести фронтенд-стек в architecture/tech-stack.md и описать контракт Admin API (CreateBot/PublishBot, обмен Flow).
-- 2026-07-08 — Первый реальный кейс после MVP конструктора — интернет-магазин с корзиной внутри Telegram/MAX: mini app-витрина (core/cart+core/catalog по ADR-0006), воронка в боте из блоков, платежи как platform-specific возможность по CapabilityMatrix, товары/заказы — отдельный bounded context Shop (ядро про них не знает).
+- 2026-07-10 — Не начинать отдельную Mini App-витрину/корзину: ближайший кейс —
+  `first-bot-request-assistant`, где Flow собирает заявку до подтверждения и
+  доставляет её админу; каталог, корзина и платежи остаются отложенными.
 - 2026-07-08 — Реализовать infrastructure/db по ADR-0008 (models/mappers/repositories, Alembic, интеграционные тесты testcontainers) и admin_routes + webhook_routes; фронт-редактор подключить к Admin API
 - 2026-07-08 — MaxBotAdapter: оценить SDK maxapi (github.com/love-apples/maxapi — MIT, живая v1.2.1, aiogram-стиль на aiohttp) против тонкого httpx-клиента; проверить, что SDK ходит на platform-api2.max.ru (токен в Authorization); Dispatcher/Router не нужны — роутит Flow Engine; решение оформить как ADR-0009 по правилу зависимостей tech-stack.md
 - 2026-07-08 — Рендеринг исходящих сообщений (Message Dispatcher/адаптеры): использовать Templater/ (локальный референс, BigPixelLab) как источник дизайна декларативного описания сообщения (текст+клавиатуры+if/for+вложенные шаблоны); код НЕ вендорить — нет лицензии, eval() на данных, привязка к aiogram; писать нейтральную модель + рендер в адаптерах

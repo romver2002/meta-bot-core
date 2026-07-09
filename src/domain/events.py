@@ -30,6 +30,7 @@ class IncomingEvent:
     text: str | None = None
     payload: str | None = None
     update_id: str | None = None  # идентификатор update платформы — ключ идемпотентности
+    callback_id: str | None = None  # транзиентный id нажатия кнопки — для подтверждения (ack)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

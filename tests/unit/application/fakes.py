@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 
 from application.errors import ConcurrencyError
-from application.ports.bot_platform import MiniAppIdentity, SendMessageCommand
+from application.ports.bot_platform import AnswerCallbackCommand, MiniAppIdentity, SendMessageCommand
 from application.ports.flow_repository import FlowDraft
 from application.ports.http_client import HttpResponse
 from domain.bot.entities import Bot
@@ -132,6 +132,7 @@ class StubPlatform:
         self._init_data_validator = init_data_validator
         self.verified_tokens: list[str] = []
         self.sent: list[SendMessageCommand] = []
+        self.answered: list[AnswerCallbackCommand] = []
 
     def capabilities(self) -> CapabilityMatrix:
         return self._capabilities
@@ -148,6 +149,9 @@ class StubPlatform:
 
     async def send_message(self, command: SendMessageCommand) -> None:
         self.sent.append(command)
+
+    async def answer_callback(self, command: AnswerCallbackCommand) -> None:
+        self.answered.append(command)
 
 
 class StubIdempotency:

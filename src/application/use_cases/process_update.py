@@ -18,6 +18,7 @@ CapabilityMatrix адаптеров (BR-006); здесь — защита в г�
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import re
 import unicodedata
@@ -26,7 +27,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from application.errors import ApplicationError, BotNotFoundError, FlowExecutionError, FlowNotFoundError
-from application.ports.bot_platform import PlatformFactory, SendMessageCommand
+from application.ports.bot_platform import AnswerCallbackCommand, PlatformFactory, SendMessageCommand
 from application.ports.bot_repository import BotRepository
 from application.ports.connection_secrets import SecretResolverPort
 from application.ports.flow_repository import FlowRepository
@@ -138,10 +139,23 @@ class ProcessUpdateUseCase:
         bot = await self._bots.get(event.bot_id)
         if bot is None:
             raise BotNotFoundError(f"Бот {event.bot_id!r} не найден")
-        if bot.status is not BotStatus.PUBLISHED or bot.published_flow_version_id is None:
-            return  # пауза/черновик: бот не отвечает
         if event.platform is not bot.platform:
-            return  # защита от чужого вебхука
+            return  # защита от чужого вебхука (нельзя даже подтверждать чужим адаптером)
+
+        platform = self._platform_factory.for_platform(bot.platform)
+        token = await self._token_vault.retrieve(bot.token.vault_ref)
+
+        if event.callback_id is not None:
+            # Гасим индикатор ожидания сразу и для ЛЮБОГО нажатия — в том числе
+            # у бота на паузе/черновике: пауза и есть главный источник протухших
+            # кнопок. Best-effort: подтверждение не важнее исполнения сценария.
+            with contextlib.suppress(ApplicationError):
+                await platform.answer_callback(
+                    AnswerCallbackCommand(bot_token=token, callback_id=event.callback_id)
+                )
+
+        if bot.status is not BotStatus.PUBLISHED or bot.published_flow_version_id is None:
+            return  # пауза/черновик: бот не отвечает (нажатие уже подтверждено выше)
 
         version = await self._flows.get_version(bot.published_flow_version_id)
         if version is None:
@@ -157,9 +171,6 @@ class ProcessUpdateUseCase:
                 external_user_id=event.external_user_id,
                 flow_version_id=version.id,
             )
-
-        platform = self._platform_factory.for_platform(bot.platform)
-        token = await self._token_vault.retrieve(bot.token.vault_ref)
 
         async def send(text: str, buttons: tuple[Button, ...] = ()) -> None:
             await platform.send_message(

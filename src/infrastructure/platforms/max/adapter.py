@@ -13,7 +13,7 @@ from typing import Any
 import httpx
 
 from application.errors import ApplicationError
-from application.ports.bot_platform import MiniAppIdentity, SendMessageCommand
+from application.ports.bot_platform import AnswerCallbackCommand, MiniAppIdentity, SendMessageCommand
 from domain.capabilities import CapabilityMatrix
 from domain.events import IncomingEvent
 from domain.flow.entities import Button
@@ -89,3 +89,16 @@ class MaxBotAdapter:
         except httpx.HTTPError as exc:
             # В тексте ошибки нет ни токена, ни содержимого сообщения.
             raise ApplicationError(f"MAX message не доставлен (chat={command.external_chat_id})") from exc
+
+    async def answer_callback(self, command: AnswerCallbackCommand) -> None:
+        """POST /answers?callback_id= — defensive-политика «всегда отвечать» (specs/002)."""
+        try:
+            response = await self._client.post(
+                f"{self._base_url}/answers",
+                params={"callback_id": command.callback_id},
+                json={},
+                headers={"Authorization": command.bot_token},
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise ApplicationError("MAX /answers не принят") from exc

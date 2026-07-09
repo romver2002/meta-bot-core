@@ -64,6 +64,7 @@ def parse_max_update(bot_id: str, payload: Mapping[str, object]) -> IncomingEven
             update_id=str(callback_id)
             if callback_id is not None
             else _composite_key(update_type, timestamp, user.get("user_id")),
+            callback_id=str(callback_id) if callback_id is not None else None,
         )
 
     if update_type == "bot_started":

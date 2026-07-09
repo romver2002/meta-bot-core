@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.11"
+version: "1.12"
 updated: 2026-07-10
 verified_commit: ""
 owner: ""
@@ -27,7 +27,7 @@ owner: ""
 - 2026-07-09 — первый бот «умный помощник по заявкам» как Flow-данные ([examples/first-bot-request-assistant/](../../examples/first-bot-request-assistant/)): каркас + живой AI-ответ (OpenRouter) + форма; live-smoke в Telegram пройден (навигация/меню вживую). Движковый must-fix остаточной `http_request`-переменной (null-content → прошлый ответ) починен + регресс-тест.
 - 2026-07-10 — блок `notify` (ADR-0010 proposed): доставка третьему лицу по символической роли за портом `NotificationTargetResolverPort`, best-effort; `PUT /notifications/{role}`; пример first-bot реально доставляет заявку админу/разработчику + catch-all подсказка. Рой-ревью (55 агентов): 2 must-fix починены (resolve вне try; мёртвые кнопки после catch-all-детура → guard-триггеры в данных), антиспуфинг карточки, атомарный общий JSON-store.
 - 2026-07-10 — `frontend/constructor/`: кнопочные переходы видны на холсте (синхронизированы с `Button.target`),
-  безопасный путь публикации (скрытые bot_id/row_version, лок платформы, проверка Mini App), палитра = Engine v1 включая `notify`; `npm test` (4) и build зелёные.
+  безопасный путь публикации (скрытые bot_id/row_version, лок платформы, проверка Mini App), палитра = Engine v1 включая `notify`; адаптивные связи можно изгибать и переподключать по цели без изменения Flow-данных; `npm test` (4) и build зелёные.
 
 ## В работе
 
@@ -47,7 +47,6 @@ owner: ""
 |---|---|---|---|
 | Нет IAM: Admin API без аутентификации; token vault — dev-файл (`.secrets/`) | Контур только для доверенной среды разработки | Auth и прод-vault — открытые вопросы active-context; порты позволяют заменить без правки ядра | — |
 | Блок custom_code движком не исполняется | Сценарии с ним не публикуются (BR-006 по CapabilityMatrix v1) | Реализуется своим этапом (песочница ADR-0003) | — |
-| 2026-07-09 — нет answer_callback: спиннер на inline-кнопках TG не гасится (answerCallbackQuery), на MAX не зовётся /answers — порт BotPlatformPort.answer_callback, P1 | — | — | — |
 | 2026-07-10 — catch-all TEXT-триггер уводит сессию с узла-ожидания кнопок (show_buttons) — его кнопки перестают матчиться | Кнопки «умирают» после свободного текста | В данных — фолбэк callback-триггеры (+guard), как в примере first-bot; системно — правило приоритета маршрутизации, кандидат в BR | — |
 
 ## Расхождения база↔код
