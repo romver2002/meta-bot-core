@@ -38,6 +38,52 @@
       "config": {
         "payload": "dev_start"
       }
+    },
+    {
+      "id": "t_text",
+      "type": "text",
+      "target_node_id": "n_text_hint",
+      "config": {}
+    },
+    {
+      "id": "t_req_confirm",
+      "type": "callback",
+      "target_node_id": "req_confirm_guard",
+      "config": {
+        "payload": "req_notify"
+      }
+    },
+    {
+      "id": "t_dev_confirm",
+      "type": "callback",
+      "target_node_id": "dev_confirm_guard",
+      "config": {
+        "payload": "dev_notify"
+      }
+    },
+    {
+      "id": "t_help",
+      "type": "callback",
+      "target_node_id": "n_help",
+      "config": {
+        "payload": "n_help"
+      }
+    },
+    {
+      "id": "t_services",
+      "type": "callback",
+      "target_node_id": "n_services",
+      "config": {
+        "payload": "n_services"
+      }
+    },
+    {
+      "id": "t_faq",
+      "type": "callback",
+      "target_node_id": "n_faq",
+      "config": {
+        "payload": "n_faq"
+      }
     }
   ],
   "nodes": [
@@ -320,7 +366,7 @@
         {
           "label": "✅ Подтвердить",
           "action": "next",
-          "target": "req_done"
+          "target": "req_notify"
         },
         {
           "label": "🔄 Заполнить заново",
@@ -384,7 +430,7 @@
         {
           "label": "📨 Отправить",
           "action": "next",
-          "target": "dev_done"
+          "target": "dev_notify"
         },
         {
           "label": "🔄 Заново",
@@ -411,6 +457,59 @@
           "target": "n_menu"
         }
       ]
+    },
+    {
+      "id": "req_notify",
+      "type": "notify",
+      "params": {
+        "to": "admin",
+        "text": "🆕 Новая заявка\n\n👤 Имя: {req_name}\n📞 Контакт: {req_contact}\n📌 Задача: {req_task}\n⏱ Срок: {req_deadline}\n💰 Бюджет: {req_budget}"
+      },
+      "buttons": []
+    },
+    {
+      "id": "dev_notify",
+      "type": "notify",
+      "params": {
+        "to": "developer",
+        "text": "👨‍💻 Вопрос разработчику\n\n💬 {dev_message}\n📞 Контакт: {dev_contact}"
+      },
+      "buttons": []
+    },
+    {
+      "id": "n_text_hint",
+      "type": "show_buttons",
+      "params": {
+        "text": "Я отвечаю на вопросы после кнопки «🧠 Задать вопрос» — так я точно пойму, что это вопрос ко мне. Или выберите пункт меню 👇"
+      },
+      "buttons": [
+        {
+          "label": "🧠 Задать вопрос",
+          "action": "next",
+          "target": "n_ask_prompt"
+        },
+        {
+          "label": "⬅️ В меню",
+          "action": "next",
+          "target": "n_menu"
+        }
+      ]
+    },
+    {
+      "id": "req_confirm_guard",
+      "type": "condition",
+      "params": {
+        "expression": "req_contact"
+      },
+      "buttons": []
+    },
+    {
+      "id": "dev_confirm_guard",
+      "type": "condition",
+      "params": {
+        "expression": "dev_contact"
+      },
+      "buttons": []
     }
   ],
   "transitions": [
@@ -488,6 +587,36 @@
       "source_node_id": "dev_ask_contact",
       "target_node_id": "dev_confirm",
       "on": "next"
+    },
+    {
+      "source_node_id": "req_notify",
+      "target_node_id": "req_done",
+      "on": "next"
+    },
+    {
+      "source_node_id": "dev_notify",
+      "target_node_id": "dev_done",
+      "on": "next"
+    },
+    {
+      "source_node_id": "req_confirm_guard",
+      "target_node_id": "req_notify",
+      "on": "true"
+    },
+    {
+      "source_node_id": "req_confirm_guard",
+      "target_node_id": "req_start",
+      "on": "false"
+    },
+    {
+      "source_node_id": "dev_confirm_guard",
+      "target_node_id": "dev_notify",
+      "on": "true"
+    },
+    {
+      "source_node_id": "dev_confirm_guard",
+      "target_node_id": "dev_start",
+      "on": "false"
     }
   ]
 }

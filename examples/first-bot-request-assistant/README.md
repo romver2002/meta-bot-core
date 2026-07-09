@@ -8,8 +8,11 @@
 
 ## Что внутри Flow
 
-23 узла: каркас (приветствие, меню-хаб, «Что умею», «Услуги», «Частые вопросы»),
-живой AI-ответ через OpenRouter, форма заявки и связь с разработчиком. Контракт
+28 узлов: каркас (приветствие, меню-хаб, «Что умею», «Услуги», «Частые вопросы»),
+живой AI-ответ через OpenRouter, форма заявки с доставкой админу (блок `notify`,
+ADR-0010), связь с разработчиком с доставкой, подсказка на свободный текст и
+guard-триггеры «протухших» кнопок (клик по старой карточке без данных в сессии
+перезапускает форму, а не шлёт пустую заявку). Контракт
 документа — [src/domain/flow/codec.py](../../src/domain/flow/codec.py). Проверка
 исполнимости — [tests/unit/examples/test_first_bot_request_assistant.py](../../tests/unit/examples/test_first_bot_request_assistant.py)
 (валидность к публикации + прогон всех путей на стабах).
@@ -51,6 +54,14 @@ curl -sX PUT http://127.0.0.1:8000/api/bots/<BOT_ID>/connections/openrouter_api_
   -H 'Content-Type: application/json' \
   -d '{"value":"<OPENROUTER_API_KEY>"}'
 
+# 3a. Привязать адресатов уведомлений (роли admin/developer из блоков notify) → 204.
+#     chat_id — числовой id чата получателя (получатель должен один раз нажать
+#     Start у бота, иначе платформа не даст боту писать первым).
+curl -sX PUT http://127.0.0.1:8000/api/bots/<BOT_ID>/notifications/admin \
+  -H 'Content-Type: application/json' -d '{"chat_id":"<ADMIN_CHAT_ID>"}'
+curl -sX PUT http://127.0.0.1:8000/api/bots/<BOT_ID>/notifications/developer \
+  -H 'Content-Type: application/json' -d '{"chat_id":"<DEV_CHAT_ID>"}'
+
 # 4. Сохранить сценарий (оборачиваем definition; UTF-8 обязателен для кириллицы)
 jq '{definition: ., name: "Умный помощник по заявкам"}' flow.definition.json \
   | curl -sX PUT http://127.0.0.1:8000/api/bots/<BOT_ID>/flow \
@@ -73,11 +84,11 @@ curl -s "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook?url=https://<public-
 Головная фича (AI-ответ по базе знаний + каркас + сбор заявки до подтверждения)
 работает вживую. Отложено следующим этапом (ADR):
 
-- **Доставка заявки третьему лицу — заглушка.** `req_done`/`dev_done` показывают
-  «принято», но реального уведомления админу/разработчику нет: блока `notify`
-  (в любой `chat_id` за `BotPlatformPort.send_message`) ещё нет. Слать через
-  `http_request` на `api.telegram.org` **нельзя** — протечка платформы в данные +
-  утечка bot-token. Нужен ADR: `notify` + `NotificationTargetResolver` + outbox.
+- **Доставка уведомлений — best-effort (ADR-0010).** Заявка/вопрос реально
+  доставляются админу/разработчику блоком `notify`, но при сбое доставки
+  (получатель заблокировал бота, роль не привязана) уведомление тихо теряется,
+  а пользователь всё равно видит «принято». Гарантированная доставка (outbox +
+  ретраи) и онбординг-захват chat_id (`/register_admin`) — следующий этап.
 - **Хэндофф к человеку — кнопками, не по полю `status`.** Движок пока не умеет
   двухуровневый разбор JSON-ответа и `contains`/`and`/`or` в `condition`; поэтому
   AI просят отвечать плоским текстом, а под каждым ответом — кнопки

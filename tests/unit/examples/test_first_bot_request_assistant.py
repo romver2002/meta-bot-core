@@ -28,6 +28,7 @@ from tests.unit.application.fakes import (
     InMemorySessionRepository,
     InMemoryTokenVault,
     StubHttpClient,
+    StubNotificationTargets,
     StubPlatform,
     StubPlatformFactory,
     StubSecretResolver,
@@ -37,6 +38,7 @@ from tests.unit.factories import full_capabilities, make_bot
 pytestmark = pytest.mark.unit
 
 BOT_ID, USER, CHAT = "first-bot", "u1", "c1"
+ADMIN_CHAT, DEV_CHAT = "admin-chat-1", "dev-chat-1"
 API_KEY = "sk-test-KEY"
 DEFINITION_PATH = Path(__file__).resolve().parents[3] / "examples" / "first-bot-request-assistant" / "flow.definition.json"
 
@@ -87,6 +89,7 @@ async def _engine(*, http_client: HttpClientPort | None = None):
         platform_factory=StubPlatformFactory(platform_port),
         http_client=http_client or _openrouter_ok("ответ"),
         secrets=StubSecretResolver({"openrouter_api_key": API_KEY}),
+        notifications=StubNotificationTargets({"admin": ADMIN_CHAT, "developer": DEV_CHAT}),
     )
     return use_case, platform_port
 
@@ -115,7 +118,7 @@ def test_example_flow_valid_for_publication() -> None:
     flow = _load_flow()
     # Не бросает: блоки/триггеры/кнопки в матрице v1, достижимость и детерминизм — ок.
     flow.validate_for_publication(ENGINE_V1_CAPABILITIES)
-    assert len(flow.nodes) == 23
+    assert len(flow.nodes) == 28
 
 
 # ── каркас ──────────────────────────────────────────────────────────────────
@@ -213,11 +216,87 @@ async def test_request_form_collects_and_confirms() -> None:
     assert "+70000000000" in summary
     assert "Нужен бот-помощник" in summary
 
-    await use_case.execute(_click("req_done"))
+    await use_case.execute(_click("req_notify"))  # «✅ Подтвердить» -> notify -> финал
 
-    done = port.sent[-1].text
-    assert "Иван" in done  # {req_name} интерполировано в подтверждение
-    assert "+70000000000" in done  # {req_contact} интерполировано
+    admin_messages = [c for c in port.sent if c.external_chat_id == ADMIN_CHAT]
+    assert len(admin_messages) == 1  # заявка реально доставлена админу (ADR-0010)
+    assert "Иван" in admin_messages[0].text
+    assert "+70000000000" in admin_messages[0].text
+
+    done = port.sent[-1]
+    assert done.external_chat_id == CHAT  # финал — пользователю
+    assert "Иван" in done.text  # {req_name} интерполировано в подтверждение
+    assert "+70000000000" in done.text  # {req_contact} интерполировано
+
+
+async def test_developer_contact_delivers_message() -> None:
+    use_case, port = await _engine()
+
+    await use_case.execute(_event(TriggerType.START))
+    await use_case.execute(_click("dev_start"))
+    await use_case.execute(_event(TriggerType.TEXT, text="Нужна интеграция с CRM"))
+    await use_case.execute(_event(TriggerType.TEXT, text="@roman"))
+    await use_case.execute(_click("dev_notify"))  # «📨 Отправить»
+
+    dev_messages = [c for c in port.sent if c.external_chat_id == DEV_CHAT]
+    assert len(dev_messages) == 1
+    assert "Нужна интеграция с CRM" in dev_messages[0].text
+    assert "@roman" in dev_messages[0].text
+    assert port.sent[-1].external_chat_id == CHAT  # пользователь видит «Передал!»
+
+
+async def test_free_text_at_menu_gets_hint_not_silence() -> None:
+    use_case, port = await _engine()
+
+    await use_case.execute(_event(TriggerType.START))
+    await use_case.execute(_event(TriggerType.TEXT, text="сколько стоит бот?"))  # без кнопки
+
+    assert "Задать вопрос" in port.sent[-1].text  # подсказка вместо молчания
+    assert len(port.sent[-1].buttons) == 2
+
+
+async def test_confirm_survives_free_text_detour() -> None:
+    # Регресс (must-fix роя): «да» на экране подтверждения уводит сессию на
+    # подсказку (catch-all t_text); «✅ Подтвердить» обязана всё равно доставить.
+    use_case, port = await _engine()
+
+    await use_case.execute(_event(TriggerType.START))
+    await use_case.execute(_click("req_start"))
+    for answer in ("Иван", "+70000000000", "Нужен бот", "2 недели", "не определён"):
+        await use_case.execute(_event(TriggerType.TEXT, text=answer))
+    await use_case.execute(_event(TriggerType.TEXT, text="да"))  # детур на подсказку
+
+    await use_case.execute(_click("req_notify"))  # тап по «✅ Подтвердить» со старой карточки
+
+    admin_messages = [c for c in port.sent if c.external_chat_id == ADMIN_CHAT]
+    assert len(admin_messages) == 1  # заявка доставлена, не потеряна молча
+    assert "Иван" in admin_messages[0].text
+    assert port.sent[-1].external_chat_id == CHAT  # пользователь увидел «Готово»
+
+
+async def test_stale_confirm_without_data_restarts_form_not_empty_card() -> None:
+    # Протухшая кнопка «✅ Подтвердить» в свежей сессии (переменных нет):
+    # guard-условие уводит на перезапуск формы, пустая карточка админу не уходит.
+    use_case, port = await _engine()
+
+    await use_case.execute(_event(TriggerType.START))
+    await use_case.execute(_click("req_notify"))  # без заполнения формы
+
+    assert [c for c in port.sent if c.external_chat_id == ADMIN_CHAT] == []
+    # Guard увёл на перезапуск формы: интро req_start и первый вопрос анкеты.
+    assert any("Оформим заявку" in c.text for c in port.sent)
+    assert "Как к вам обращаться?" in port.sent[-1].text
+
+
+async def test_menu_screen_button_survives_detour() -> None:
+    use_case, port = await _engine()
+
+    await use_case.execute(_event(TriggerType.START))
+    await use_case.execute(_event(TriggerType.TEXT, text="привет"))  # детур на подсказку
+
+    await use_case.execute(_click("n_services"))  # старая кнопка меню
+
+    assert "Коротко об услугах" in port.sent[-1].text  # фолбэк-триггер сработал
 
 
 # ── устойчивость к «старым» клавиатурам: глобальный возврат в меню ───────────
