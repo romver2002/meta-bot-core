@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 
 from application.errors import (
     BotCreationError,
@@ -24,6 +24,7 @@ from application.use_cases.get_bot import GetBotUseCase
 from application.use_cases.publish_bot import PublishBotUseCase
 from application.use_cases.save_flow_draft import SaveFlowDraftUseCase
 from application.use_cases.set_connection_secret import SetConnectionSecretUseCase
+from application.use_cases.set_notification_target import SetNotificationTargetUseCase
 from application.use_cases.submit_mini_app_result import SubmitMiniAppResultUseCase
 from domain.bot.value_objects import Platform
 from domain.errors import (
@@ -40,6 +41,7 @@ from presentation.providers.admin import (
     get_publish_bot_uc,
     get_save_flow_draft_uc,
     get_set_connection_secret_uc,
+    get_set_notification_target_uc,
     get_submit_mini_app_result_uc,
 )
 from presentation.schemas.admin import (
@@ -53,6 +55,7 @@ from presentation.schemas.admin import (
     SaveFlowRequest,
     SaveFlowResponse,
     SetConnectionSecretRequest,
+    SetNotificationTargetRequest,
 )
 
 admin = APIRouter()
@@ -182,5 +185,22 @@ async def set_connection_secret(
 ) -> None:
     try:
         await use_case.execute(bot_id, name, request.value)
+    except BotNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@admin.put(
+    "/bots/{bot_id}/notifications/{role}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Привязать адресата роли уведомлений (блок notify, ADR-0010)",
+)
+async def set_notification_target(
+    bot_id: str,
+    role: Annotated[str, Path(pattern=r"^[A-Za-z0-9_.-]{1,64}$")],
+    request: SetNotificationTargetRequest,
+    use_case: Annotated[SetNotificationTargetUseCase, Depends(get_set_notification_target_uc)],
+) -> None:
+    try:
+        await use_case.execute(bot_id, role, request.chat_id)
     except BotNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

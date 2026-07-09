@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.3"
-updated: 2026-07-08
+version: "1.4"
+updated: 2026-07-10
 verified_commit: ""
 owner: "teamlead"
 ---
@@ -73,6 +73,7 @@ owner: "teamlead"
 - [0007-visual-flow-editor.md](decisions/0007-visual-flow-editor.md) — визуальный редактор сценариев: React + React Flow (proposed)
 - [0008-persistence-model.md](decisions/0008-persistence-model.md) — модель хранения: версии Flow в JSONB, Session в PG+Redis (proposed)
 - [0009-max-adapter-thin-client.md](decisions/0009-max-adapter-thin-client.md) — MaxBotAdapter: тонкий httpx-клиент вместо SDK maxapi (proposed)
+- [0010-notify-block-and-notification-targets.md](decisions/0010-notify-block-and-notification-targets.md) — блок notify + адресаты уведомлений (роль → chat_id) (proposed)
 
 ### workflows/ — процессы под тип задачи (стабильный)
 - [new-feature.md](workflows/new-feature.md) — процесс новой фичи (включая связку со spec-kit)

@@ -1,7 +1,7 @@
 ---
 status: draft
-version: "1.2"
-updated: 2026-07-08
+version: "1.3"
+updated: 2026-07-10
 verified_commit: ""
 owner: ""
 ---
@@ -78,7 +78,8 @@ ADR только со статусом `proposed` и сообщает об эт�
 | [0007](0007-visual-flow-editor.md) | Визуальный редактор сценариев — React + React Flow | proposed | 2026-07-08 |
 | [0008](0008-persistence-model.md) | Модель хранения: версии Flow в JSONB, Session в PG+Redis | proposed | 2026-07-08 |
 | [0009](0009-max-adapter-thin-client.md) | MaxBotAdapter — тонкий httpx-клиент вместо SDK maxapi | proposed | 2026-07-08 |
+| [0010](0010-notify-block-and-notification-targets.md) | Блок notify + адресаты уведомлений (роль → chat_id) | proposed | 2026-07-09 |
 
-ADR-0001 и 0002 приняты (основа проекта); 0003–0009 — черновики на ратификацию
+ADR-0001 и 0002 приняты (основа проекта); 0003–0010 — черновики на ратификацию
 командой: статус `accepted` им проставляет владелец раздела
 ([../_meta/governance.md](../_meta/governance.md)).

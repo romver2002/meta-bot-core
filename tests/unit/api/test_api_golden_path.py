@@ -36,6 +36,7 @@ from tests.unit.application.fakes import (
     InMemoryTokenVault,
     StubHttpClient,
     StubIdempotency,
+    StubNotificationTargets,
     StubPlatform,
     StubPlatformFactory,
     StubSecretResolver,
@@ -74,6 +75,7 @@ def _build_app() -> tuple[FastAPI, StubPlatform, StubIdempotency]:
                 platform_factory=factory,
                 http_client=StubHttpClient(),
                 secrets=StubSecretResolver(),
+                notifications=StubNotificationTargets(),
             ),
         }
     )

@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.10"
-updated: 2026-07-09
+version: "1.11"
+updated: 2026-07-10
 verified_commit: ""
 owner: ""
 ---
@@ -21,18 +21,22 @@ owner: ""
   [arch-lint](../../.github/workflows/arch-lint.yml)/[ci.yml](../../.github/workflows/ci.yml) (ruff/mypy/pytest, coverage ≥90%).
 - 2026-07-06 — реестр ADR: 0001–0002 accepted, 0003–0009 proposed.
 - 2026-07-08 — бэкенд по канону CA (Python 3.14 + uv, PG16+Redis7): domain (Bot/Flow/Session, BR-001/003/006), хранение ADR-0008, Flow Engine, адаптеры Telegram/MAX, webhook с идемпотентностью, Admin API. Гейт зелёный: ruff · mypy strict · lint-imports 6 контрактов · 81 unit + 4 integration · e2e золотого пути + живой смоук.
-- 2026-07-09 — `frontend/constructor/` актуализирован под живой Flow Engine/API конструктора: Engine v1 palette без active `custom_code`, `trigger.config`, `http_request` object fields + `error`, `Button.target`, панель «Боты и публикация» (`create`/`save row_version`/`publish`/mini app/secrets), стартовый шаблон «умного помощника по заявкам».
-- 2026-07-09 — UX редактора исправлен: палитра и правая панель закрываются/открываются, справа вкладки «Настройки»/«Публикация», формы публикации раскрываются секциями, на узких экранах панели работают как drawer поверх холста.
+- 2026-07-09 — `frontend/constructor/` актуализирован под живой Flow Engine/API (Engine v1 palette, `trigger.config`, `http_request`, панель «Боты и публикация», стартовый шаблон помощника) + UX-исправления (закрываемые панели, вкладки, drawer на узких экранах).
 - 2026-07-08 — mini app end-to-end: auth init data (BR-007), блок `open_mini_app`, триггер `mini_app_result`, привязка mini app к боту.
 - 2026-07-09 — блок `http_request` (звонок в любой HTTP-API, `{{secret:*}}` за портом) + секреты подключения за портом; AI-ответ через OpenRouter выражается ДАННЫМИ Flow, без бото-специфики в ядре.
 - 2026-07-09 — первый бот «умный помощник по заявкам» как Flow-данные ([examples/first-bot-request-assistant/](../../examples/first-bot-request-assistant/)): каркас + живой AI-ответ (OpenRouter) + форма; live-smoke в Telegram пройден (навигация/меню вживую). Движковый must-fix остаточной `http_request`-переменной (null-content → прошлый ответ) починен + регресс-тест.
+- 2026-07-10 — блок `notify` (ADR-0010 proposed): доставка третьему лицу по символической роли за портом `NotificationTargetResolverPort`, best-effort; `PUT /notifications/{role}`; пример first-bot реально доставляет заявку админу/разработчику + catch-all подсказка. Рой-ревью (55 агентов): 2 must-fix починены (resolve вне try; мёртвые кнопки после catch-all-детура → guard-триггеры в данных), антиспуфинг карточки, атомарный общий JSON-store.
+- 2026-07-10 — `frontend/constructor/`: кнопочные переходы видны на холсте (синхронизированы с `Button.target`),
+  безопасный путь публикации (скрытые bot_id/row_version, лок платформы, проверка Mini App), палитра = Engine v1 включая `notify`; `npm test` (4) и build зелёные.
 
 ## В работе
 
 <!-- Начато, но не завершено; в каком состоянии оставлено и что дальше. -->
 
-- 2026-07-08 — ратификация ADR [0003](../decisions/0003-flow-engine-blocks-and-sandbox.md)–[0009](../decisions/0009-max-adapter-thin-client.md)
-  (proposed, ждут команды). Следом — уведомление админа (notify), редактор ↔ Admin API, песочница custom_code.
+- 2026-07-08 — ратификация ADR [0003](../decisions/0003-flow-engine-blocks-and-sandbox.md)–[0010](../decisions/0010-notify-block-and-notification-targets.md)
+  (proposed, ждут команды). Следом — редактор ↔ Admin API, песочница custom_code.
+- 2026-07-10 — read-контракт черновика и восстановление layout в редакторе:
+  без него нельзя безопасно открыть и продолжить редактирование существующего Flow.
 
 ## Известные проблемы
 
@@ -44,6 +48,7 @@ owner: ""
 | Нет IAM: Admin API без аутентификации; token vault — dev-файл (`.secrets/`) | Контур только для доверенной среды разработки | Auth и прод-vault — открытые вопросы active-context; порты позволяют заменить без правки ядра | — |
 | Блок custom_code движком не исполняется | Сценарии с ним не публикуются (BR-006 по CapabilityMatrix v1) | Реализуется своим этапом (песочница ADR-0003) | — |
 | 2026-07-09 — нет answer_callback: спиннер на inline-кнопках TG не гасится (answerCallbackQuery), на MAX не зовётся /answers — порт BotPlatformPort.answer_callback, P1 | — | — | — |
+| 2026-07-10 — catch-all TEXT-триггер уводит сессию с узла-ожидания кнопок (show_buttons) — его кнопки перестают матчиться | Кнопки «умирают» после свободного текста | В данных — фолбэк callback-триггеры (+guard), как в примере first-bot; системно — правило приоритета маршрутизации, кандидат в BR | — |
 
 ## Расхождения база↔код
 
@@ -51,31 +56,26 @@ owner: ""
      (или между документами) — НЕ исправляя их молча, см. [../_meta/lifecycle.md](../_meta/lifecycle.md).
      Расхождение устранено (документ или код поправлен) → строку удалить. -->
 
-- 2026-07-08 — канон портов/use case'ов ([overview](../architecture/overview.md)) не содержит
-  порты Admin API/webhook/mini app/http (`BotRepository`, `IdempotencyPort`, `HttpClientPort`,
-  `SecretResolverPort`, mini-app/connection UC, `validate_init_data`) — внести при ратификации ADR-0008/0009.
-- 2026-07-09 — `session.variables` (PII формы) — durable в Postgres JSONB
-  (`PgSessionRepository`) без ретеншена/согласия, не «эфемерно в Redis». Нужен
-  ретеншен/эрейзер завершённых сессий + согласие (прод-комплаенс).
+- 2026-07-08 — канон портов ([overview](../architecture/overview.md)) не содержит порты Admin API/webhook/mini
+  app/http/notify (`BotRepository`, `IdempotencyPort`, `HttpClientPort`, `SecretResolverPort`, `NotificationTargetResolverPort`, UC) — внести при ратификации ADR-0008/0009/0010.
+- 2026-07-09 — `session.variables` (PII формы) — durable в Postgres JSONB без
+  ретеншена/согласия, не «эфемерно в Redis»; нужен эрейзер завершённых сессий + согласие.
 
 ## Технический долг
 
 <!-- Только крупные пункты, влияющие на планирование. Мелочь — в issue-трекер.
      У каждого пункта — ссылка на issue и почему это долг (какое правило нарушено). -->
 
-- 2026-07-06 — не выбрано хранилище секретов за портом `TokenVaultPort`
-  (token vault) — уточнить у команды; блокирует безопасную реализацию
-  BR-004/BR-007, см. [../architecture/overview.md](../architecture/overview.md).
-- 2026-07-06 — не зафиксированы пороги покрытия тестами (в CI включён гейт
-  ≥90% на domain/application по testing-strategy.md; ратифицировать).
-- 2026-07-08 — отложено по аудиту (осознанно): (1) optimistic lock агрегата
-  Bot между get() и save() — до конкурентных админ-сценариев (IAM);
-  (2) seed `capability_matrix` в БД — матрицы v1 живут в адаптерах, таблица
-  ждёт ратификации ADR-0005; (3) `session.flow_version_id/current_node_id`
-  nullable вопреки design.md §1 — черновая сессия создаётся до первого шага.
-- 2026-07-08 — перед релизом MAX сверить живым запросом 6 пунктов «требует
-  проверки» из `specs/002-platform-deep-dive/report.md` §6 (`update_types`,
-  429/`Retry-After`, `callback_id`, `requestContact`, сортировка/TTL initData).
+- 2026-07-06 — не выбрано прод-хранилище секретов за `TokenVaultPort` — уточнить
+  у команды; блокирует безопасную реализацию BR-004/BR-007 ([overview](../architecture/overview.md)).
+- 2026-07-06 — пороги покрытия не ратифицированы (в CI действует ≥90% на domain/application).
+- 2026-07-08 — отложено по аудиту (осознанно): (1) optimistic lock Bot между get/save — до IAM;
+  (2) seed `capability_matrix` в БД — ждёт ратификации ADR-0005;
+  (3) `session.flow_version_id/current_node_id` nullable вопреки design.md §1 (черновая сессия до первого шага).
+- 2026-07-08 — перед релизом MAX сверить живым запросом 6 пунктов «требует проверки»
+  из `specs/002-platform-deep-dive/report.md` §6 (`update_types`, 429, `callback_id`, `requestContact`, TTL initData).
+- 2026-07-10 — `__cause__` ApplicationError адаптера TG содержит URL с bot-token
+  (httpx-исключение): санировать при введении логирования; до того цепочку не логировать.
 
 ---
 

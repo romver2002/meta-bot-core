@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import itertools
+
 import pytest
 
-from application.errors import FlowExecutionError
+from application.errors import ApplicationError, FlowExecutionError
+from application.ports.bot_platform import SendMessageCommand
 from application.ports.http_client import HttpResponse
 from application.use_cases.process_update import ProcessUpdateUseCase
 from domain.bot.entities import MiniApp
@@ -20,6 +23,7 @@ from tests.unit.application.fakes import (
     InMemorySessionRepository,
     InMemoryTokenVault,
     StubHttpClient,
+    StubNotificationTargets,
     StubPlatform,
     StubPlatformFactory,
     StubSecretResolver,
@@ -95,10 +99,12 @@ async def _engine(
     mini_app_url: str | None = None,
     http_client: StubHttpClient | None = None,
     secrets: StubSecretResolver | None = None,
+    notifications: StubNotificationTargets | None = None,
+    platform_port: StubPlatform | None = None,
 ):
     bots, flows = InMemoryBotRepository(), InMemoryFlowRepository()
     sessions, vault = InMemorySessionRepository(), InMemoryTokenVault()
-    platform_port = StubPlatform(full_capabilities())
+    platform_port = platform_port or StubPlatform(full_capabilities())
 
     bot = make_bot(BOT_ID, flow_id=flow.id)
     bot.token = type(bot.token)(vault_ref=await vault.store(BOT_ID, "fake-token"))
@@ -118,6 +124,7 @@ async def _engine(
         platform_factory=StubPlatformFactory(platform_port),
         http_client=http_client or StubHttpClient(),
         secrets=secrets or StubSecretResolver(),
+        notifications=notifications or StubNotificationTargets(),
     )
     return use_case, platform_port, sessions
 
@@ -339,3 +346,141 @@ async def test_cyclic_flow_hits_step_limit() -> None:
 
     with pytest.raises(FlowExecutionError, match="лимит"):
         await use_case.execute(_event(TriggerType.START))
+
+
+# ── блок notify (ADR-0010) ───────────────────────────────────────────────────
+
+
+def _notify_flow() -> Flow:
+    """/start -> save имени -> notify админу -> финал пользователю."""
+    nodes = {
+        "form": Node(id="form", type=NodeType.SAVE, params={"key": "name", "value": "Иван"}),
+        "notify": Node(id="notify", type=NodeType.NOTIFY, params={"to": "admin", "text": "Заявка от {name}"}),
+        "done": Node(id="done", type=NodeType.SEND_MESSAGE, params={"text": "Принято, {name}."}),
+    }
+    return Flow(
+        id="flow-notify",
+        name="Уведомление",
+        nodes=nodes,
+        triggers=(Trigger(id="t", type=TriggerType.START, target_node_id="form"),),
+        transitions=(
+            Transition(source_node_id="form", target_node_id="notify"),
+            Transition(source_node_id="notify", target_node_id="done"),
+        ),
+    )
+
+
+class _FailingToChatPlatform(StubPlatform):
+    """Доставка в заданный chat_id падает (получатель заблокировал бота)."""
+
+    def __init__(self, failing_chat_id: str) -> None:
+        super().__init__(full_capabilities())
+        self._failing_chat_id = failing_chat_id
+
+    async def send_message(self, command: SendMessageCommand) -> None:
+        if command.external_chat_id == self._failing_chat_id:
+            raise ApplicationError("получатель недоступен")
+        await super().send_message(command)
+
+
+async def test_notify_delivers_to_role_and_continues() -> None:
+    use_case, port, _ = await _engine(
+        _notify_flow(), notifications=StubNotificationTargets({"admin": "admin-chat"})
+    )
+
+    await use_case.execute(_event(TriggerType.START))
+
+    admin_message, user_message = port.sent
+    assert admin_message.external_chat_id == "admin-chat"
+    assert admin_message.text == "Заявка от Иван"  # переменные сценария интерполированы
+    assert user_message.external_chat_id == CHAT
+    assert user_message.text == "Принято, Иван."
+
+
+async def test_notify_unbound_role_is_skipped_and_chain_continues() -> None:
+    use_case, port, _ = await _engine(_notify_flow(), notifications=StubNotificationTargets())
+
+    await use_case.execute(_event(TriggerType.START))
+
+    assert [c.external_chat_id for c in port.sent] == [CHAT]  # только финал пользователю
+    assert port.sent[0].text == "Принято, Иван."
+
+
+async def test_notify_delivery_failure_does_not_break_user_chain() -> None:
+    use_case, port, _ = await _engine(
+        _notify_flow(),
+        notifications=StubNotificationTargets({"admin": "admin-chat"}),
+        platform_port=_FailingToChatPlatform("admin-chat"),
+    )
+
+    await use_case.execute(_event(TriggerType.START))
+
+    # Уведомление упало (best-effort), но пользователь получил свой ответ.
+    assert [c.external_chat_id for c in port.sent] == [CHAT]
+    assert port.sent[0].text == "Принято, Иван."
+
+
+class _FailingResolver:
+    """Хранилище адресатов недоступно (битый файл и т.п., контракт порта)."""
+
+    async def resolve(self, bot_id: str, role: str) -> str | None:
+        raise ApplicationError("хранилище повреждено")
+
+
+async def test_notify_resolver_failure_does_not_break_user_chain() -> None:
+    use_case, port, _ = await _engine(_notify_flow(), notifications=_FailingResolver())
+
+    await use_case.execute(_event(TriggerType.START))
+
+    # Сбой резолва роли — тоже best-effort: пользовательская цепочка дошла до конца.
+    assert [c.external_chat_id for c in port.sent] == [CHAT]
+    assert port.sent[0].text == "Принято, Иван."
+
+
+async def test_notify_neutralizes_control_characters_in_variables() -> None:
+    ask_flow = Flow(
+        id="flow-spoof",
+        name="Спуфинг",
+        nodes={
+            "ask": Node(id="ask", type=NodeType.ASK, params={"prompt": "Имя?", "save_as": "name"}),
+            "notify": Node(id="notify", type=NodeType.NOTIFY, params={"to": "admin", "text": "Заявка от {name}"}),
+            "done": Node(id="done", type=NodeType.SEND_MESSAGE, params={"text": "Принято."}),
+        },
+        triggers=(Trigger(id="t", type=TriggerType.START, target_node_id="ask"),),
+        transitions=(
+            Transition(source_node_id="ask", target_node_id="notify"),
+            Transition(source_node_id="notify", target_node_id="done"),
+        ),
+    )
+    use_case, port, _ = await _engine(
+        ask_flow, notifications=StubNotificationTargets({"admin": "admin-chat"})
+    )
+    await use_case.execute(_event(TriggerType.START))
+
+    await use_case.execute(_event(TriggerType.TEXT, text="Иван\n📞 Контакт: fake\u202e"))
+
+    admin_message = next(c for c in port.sent if c.external_chat_id == "admin-chat")
+    assert "\n" not in admin_message.text  # перевод строки не дорисовал «поле» карточки
+    assert "\u202e" not in admin_message.text  # bidi-переопределение удалено
+    assert admin_message.text == "Заявка от Иван ⏎ 📞 Контакт: fake"
+
+
+async def test_chain_of_exactly_max_steps_completes() -> None:
+    from application.use_cases.process_update import MAX_STEPS
+
+    node_ids = [f"n{i}" for i in range(MAX_STEPS)]
+    linear_flow = Flow(
+        id="flow-max",
+        name="Ровно лимит",
+        nodes={nid: Node(id=nid, type=NodeType.SAVE, params={"key": nid, "value": "x"}) for nid in node_ids},
+        triggers=(Trigger(id="t", type=TriggerType.START, target_node_id=node_ids[0]),),
+        transitions=tuple(
+            Transition(source_node_id=a, target_node_id=b) for a, b in itertools.pairwise(node_ids)
+        ),
+    )
+    use_case, _, sessions = await _engine(linear_flow)
+
+    await use_case.execute(_event(TriggerType.START))  # не бросает «Превышен лимит»
+
+    stored = sessions.storage[(BOT_ID, USER)]
+    assert stored.status is SessionStatus.COMPLETED  # цепочка ровно в MAX_STEPS — не цикл

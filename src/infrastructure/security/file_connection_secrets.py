@@ -1,14 +1,16 @@
 """FileConnectionSecrets — dev-реализация секретов подключения.
 
 Секреты интеграций живут в локальном JSON вне БД и вне git (`.secrets/` в
-.gitignore), сгруппированы по боту и имени. Прод-хранилище (Vault/SOPS) — тот
-же открытый вопрос, что и token vault; замена не трогает ядро и use case'ы.
+.gitignore), сгруппированы по боту и имени. Механика файла — общая
+(json_file_store: атомарная запись, ошибки -> ApplicationError). Прод-хранилище
+(Vault/SOPS) — тот же открытый вопрос, что и token vault; замена не трогает ядро.
 """
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
+
+from infrastructure.security.json_file_store import load_store, save_value
 
 
 class FileConnectionSecrets:
@@ -16,15 +18,9 @@ class FileConnectionSecrets:
         self._path = Path(path)
 
     async def resolve(self, bot_id: str, name: str) -> str | None:
-        return self._load().get(bot_id, {}).get(name)
+        """:raises ApplicationError: хранилище недоступно или повреждено."""
+        return load_store(self._path).get(bot_id, {}).get(name)
 
     async def store(self, bot_id: str, name: str, value: str) -> None:
-        data = self._load()
-        data.setdefault(bot_id, {})[name] = value
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-
-    def _load(self) -> dict[str, dict[str, str]]:
-        if not self._path.exists():
-            return {}
-        return dict(json.loads(self._path.read_text(encoding="utf-8")))
+        """:raises ApplicationError: хранилище недоступно для записи."""
+        save_value(self._path, bot_id, name, value)

@@ -16,6 +16,7 @@ from tests.unit.application.fakes import (
     InMemorySessionRepository,
     InMemoryTokenVault,
     StubHttpClient,
+    StubNotificationTargets,
     StubPlatform,
     StubPlatformFactory,
     StubSecretResolver,
@@ -56,6 +57,7 @@ async def _use_case(validator) -> tuple[SubmitMiniAppResultUseCase, StubPlatform
         platform_factory=factory,
         http_client=StubHttpClient(),
         secrets=StubSecretResolver(),
+        notifications=StubNotificationTargets(),
     )
     return SubmitMiniAppResultUseCase(
         bots=bots, token_vault=vault, platform_factory=factory, process_update=process

@@ -25,6 +25,7 @@ from application.use_cases.process_update import ProcessUpdateUseCase
 from application.use_cases.publish_bot import PublishBotUseCase
 from application.use_cases.save_flow_draft import SaveFlowDraftUseCase
 from application.use_cases.set_connection_secret import SetConnectionSecretUseCase
+from application.use_cases.set_notification_target import SetNotificationTargetUseCase
 from application.use_cases.submit_mini_app_result import SubmitMiniAppResultUseCase
 from domain.bot.value_objects import Platform
 from infrastructure.cache.redis_idempotency import RedisIdempotency
@@ -40,6 +41,7 @@ from infrastructure.platforms.factory import RegistryPlatformFactory
 from infrastructure.platforms.max.adapter import MaxBotAdapter
 from infrastructure.platforms.telegram.adapter import TelegramBotAdapter
 from infrastructure.security.file_connection_secrets import FileConnectionSecrets
+from infrastructure.security.file_notification_targets import FileNotificationTargets
 from infrastructure.security.file_token_vault import FileTokenVault
 from presentation.api.admin_routes import admin
 from presentation.api.health_routes import health
@@ -52,6 +54,7 @@ from presentation.providers.admin import (
     get_publish_bot_uc,
     get_save_flow_draft_uc,
     get_set_connection_secret_uc,
+    get_set_notification_target_uc,
     get_submit_mini_app_result_uc,
 )
 from presentation.providers.system import get_healthcheck_uc, get_services_healthcheck_uc
@@ -92,6 +95,7 @@ def create_app() -> FastAPI:
     )
     idempotency = RedisIdempotency.from_settings(settings)
     connection_secrets = FileConnectionSecrets(settings.connection_secrets_file)
+    notification_targets = FileNotificationTargets(settings.notification_targets_file)
     process_update = ProcessUpdateUseCase(
         bots=bots,
         flows=flows,
@@ -100,6 +104,7 @@ def create_app() -> FastAPI:
         platform_factory=platform_factory,
         http_client=HttpxClient(http_client),
         secrets=connection_secrets,
+        notifications=notification_targets,
     )
 
     app = FastAPI(
@@ -132,6 +137,9 @@ def create_app() -> FastAPI:
         ),
         get_attach_mini_app_uc: lambda: AttachMiniAppUseCase(bots=bots),
         get_set_connection_secret_uc: lambda: SetConnectionSecretUseCase(bots=bots, secrets=connection_secrets),
+        get_set_notification_target_uc: lambda: SetNotificationTargetUseCase(
+            bots=bots, targets=notification_targets
+        ),
         get_submit_mini_app_result_uc: lambda: SubmitMiniAppResultUseCase(
             bots=bots,
             token_vault=token_vault,

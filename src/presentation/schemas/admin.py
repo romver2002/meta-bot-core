@@ -75,3 +75,7 @@ class MiniAppResultRequest(BaseModel):
 
 class SetConnectionSecretRequest(BaseModel):
     value: str = Field(min_length=1, description="Секрет интеграции (ключ внешнего API)")
+
+
+class SetNotificationTargetRequest(BaseModel):
+    chat_id: str = Field(min_length=1, max_length=128, description="external_chat_id адресата роли (ADR-0010)")

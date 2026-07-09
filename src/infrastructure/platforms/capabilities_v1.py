@@ -20,6 +20,7 @@ ENGINE_V1_CAPABILITIES = CapabilityMatrix(
             NodeType.SAVE,
             NodeType.OPEN_MINI_APP,
             NodeType.HTTP_REQUEST,
+            NodeType.NOTIFY,
         }
     ),
     trigger_types=frozenset(

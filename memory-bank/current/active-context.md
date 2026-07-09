@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.21"
-updated: 2026-07-09
+version: "1.23"
+updated: 2026-07-10
 verified_commit: ""
 owner: ""
 ---
@@ -30,31 +30,28 @@ owner: ""
 
 <!-- Список с датами, ~10 строк. Старше пары недель — в decisions/ или удалить. -->
 
-- 2026-07-06 — приняты (accepted) ADR-0001 «Clean Architecture + SOLID, строгий режим»
-  ([../decisions/0001-clean-architecture.md](../decisions/0001-clean-architecture.md)) и ADR-0002
-  «Доменное ядро + платформенные адаптеры» ([../decisions/0002-domain-core-and-adapters.md](../decisions/0002-domain-core-and-adapters.md)) — фундамент.
-- 2026-07-06 — ADR-0003..0006 (движок на блоках + песочница, webhook, capability matrix,
-  mini app как web-продукт) — черновики `proposed`, ждут ратификации командой
-  ([../decisions/README.md](../decisions/README.md)).
-- 2026-07-07 — решено: интеграцию MAX делаем **сразу на `platform-api2.max.ru`**
-  (проект greenfield); старый `platform-api.max.ru` не используем, «миграции» нет.
-  Токен MAX — в заголовке `Authorization`; в доверенные добавляется сертификат Минцифры
-  ([../architecture/platform-reference.md](../architecture/platform-reference.md),
-  [../ops/configuration.md](../ops/configuration.md)).
+- 2026-07-06 — ADR-0001/0002 (строгая CA; доменное ядро + адаптеры) — accepted,
+  фундамент; ADR-0003..0006 — proposed, ждут ратификации ([../decisions/README.md](../decisions/README.md)).
+- 2026-07-07 — интеграция MAX сразу на `platform-api2.max.ru` (старый хост не
+  используем); токен MAX — в заголовке `Authorization`; сертификат Минцифры в доверенные
+  ([../architecture/platform-reference.md](../architecture/platform-reference.md)).
 - 2026-07-08 — Каркас визуального редактора сценариев на React + React Flow (frontend/constructor): палитра 4 триггеров + 8 блоков, холст с переходами, панель настройки, гейт публикации BR-001, JSON-панель Flow. npm build ок (202 модуля), dev-сервер 200. ADR-0007 (proposed) + синхронизированы индексы.
 - 2026-07-08 — Вертикальный срез бэкенда: src/ по канону CA (domain: Bot/Flow/Session+BR-001/003/006; application: 6 портов + CreateBot/PublishBot; presentation: health; infrastructure: скелет). Стек поднят по образцу sro-agent-core (решение Романа): Python 3.14, uv+uv.lock, hatchling/hatch-vcs, pytest 9, ruff 0.14 ALL, Dockerfile+compose (PG16+Redis7). Всё зелёное: ruff, mypy strict, lint-imports 5/5, pytest 32. ADR-0008 (proposed) + specs/001-persistence/design.md
 - 2026-07-08 — Хранение по ADR-0008: модели/мапперы/Pg-репозитории (версии Flow, оптимистический лок, partial-unique активной Session), Alembic 0001. Гейт: ruff/mypy/lint-imports/pytest 32 unit + 4 integration (testcontainers, PG16) — зелёные.
-- 2026-07-08 — Проверено версионирование memory-bank: схема, hook/CI, валидатор и тесты инструментов; вывод — работает механически по diff тела, с ограничениями
 - 2026-07-08 — Адверсариальный аудит (50 агентов): 40 подтверждённых находок исправлено (TOCTOU публикации, идемпотентный publish, create-коллизия, завершение Session, non-root Docker, loopback-порты, CI с тестами и покрытием 96%); отложенное зафиксировано в progress. Гейт: 72 теста, mypy 52 файла, 6/6 контрактов
 - 2026-07-08 — Живой контур: адаптеры Telegram/MAX (ADR-0009, тонкий httpx), webhook с идемпотентностью Redis, Admin API (create/flow/publish/get), Flow Engine подключён в composition root. Гейт: 84 теста (в т.ч. e2e золотого пути и живой смоук на PG), mypy 72 файла, 6/6 контрактов
 - 2026-07-08 — Глубокое сравнение TG/MAX (рой, 55 агентов, 594 обращения к докам): отчёт specs/002-platform-deep-dive (38 confirmed/6 uncertain/2 refuted). Исправлено: ключ идемпотентности MaxBotAdapter на mid/callback_id; 2 ошибки в platform-reference (init data HMAC одинаков; у MAX нет платежей) + числа; чек-лист требует-проверки в progress
 - 2026-07-08 — Валидация init data mini app (BR-007): общее HMAC-ядро webapp_signature (TG/MAX идентичны, из specs/002), per-platform обёртки, BotPlatformPort.validate_init_data, AuthenticateMiniAppUseCase, эндпоинт POST /api/bots/{id}/miniapp/auth. Гейт: 99 тестов (криптовекторы, срок, подделка, e2e через реальный адаптер) + живой смоук на контейнере (200/401/401).
 - 2026-07-08 — BR-007 mini app auth: общий identity_from_init_data для Telegram/MAX адаптеров; signed init data без пригодного user.id теперь отклоняется, дублирование парсинга MiniAppIdentity снято, BotPlatformPort и границы слоёв не менялись.
 - 2026-07-08 — Лоуп mini app: блок open_mini_app (движок шлёт кнопку запуска web_app/open_app и ждёт), триггер mini_app_result (эндпоинт результата -> движок продолжает сценарий), AttachMiniAppUseCase + эндпоинт привязки. CapabilityMatrix v1 расширена. Гейт: 117 unit, mypy 79, 6/6 контрактов.
-- 2026-07-09 — Запущен frontend/constructor dev server: Vite на http://127.0.0.1:5173/, HTTP 200; для запуска потребовалось выполнение вне sandbox из-за Access denied в esbuild на родительские каталоги Windows-пути.
 - 2026-07-09 — первый бот 'умный помощник по заявкам' собран как Flow-данные (examples/), live-smoke пройден в Telegram (меню/навигация вживую); must-fix остаточной http_request-переменной (null-content → прошлый ответ) починен + регресс-тест
 - 2026-07-09 — Актуализирован frontend/constructor по текущему Flow Engine/API конструктора: ruflo-аудит контракта, Engine v1 catalog без active custom_code, trigger.config, http_request JSON body/headers/response_map + error outcome, button targets, панель «Боты и публикация» (create/save row_version/publish/miniapp/secrets), стартовый шаблон умного помощника; npm build зелёный.
 - 2026-07-09 — Исправлен UX frontend/constructor после замечаний: закрываемые палитра и правая панель, вкладки Настройки/Публикация, раскрываемые секции формы публикации, drawer-поведение на узких экранах, автопоказ настроек при добавлении/выборе блока; npm build зелёный.
+- 2026-07-10 — Блок `notify` (ADR-0010 proposed): доставка третьему лицу по символической роли через `NotificationTargetResolverPort` + `BotPlatformPort.send_message`, best-effort (сбой резолва/доставки не рвёт цепочку); `PUT /api/bots/{id}/notifications/{role}`; пример first-bot реально доставляет заявку админу/разработчику + catch-all подсказка. Рой-ревью 55 агентов: 2 must-fix починены (resolve вне try; мёртвые кнопки после детура → guard-триггеры), антиспуфинг карточки, атомарный JSON-store.
+- 2026-07-10 — фронтенд-конструктор: нейтральная стартовая схема, видимые
+  переходы кнопок (`Button.target`), безопасная публикация и пред-проверка Mini
+  App; валидация/сериализация не выполняются при перетаскивании. `npm test` (4)
+  и `npm run build` зелёные.
 
 ## Следующие шаги
 
@@ -72,6 +69,10 @@ owner: ""
 - 2026-07-08 — Реализовать infrastructure/db по ADR-0008 (models/mappers/repositories, Alembic, интеграционные тесты testcontainers) и admin_routes + webhook_routes; фронт-редактор подключить к Admin API
 - 2026-07-08 — MaxBotAdapter: оценить SDK maxapi (github.com/love-apples/maxapi — MIT, живая v1.2.1, aiogram-стиль на aiohttp) против тонкого httpx-клиента; проверить, что SDK ходит на platform-api2.max.ru (токен в Authorization); Dispatcher/Router не нужны — роутит Flow Engine; решение оформить как ADR-0009 по правилу зависимостей tech-stack.md
 - 2026-07-08 — Рендеринг исходящих сообщений (Message Dispatcher/адаптеры): использовать Templater/ (локальный референс, BigPixelLab) как источник дизайна декларативного описания сообщения (текст+клавиатуры+if/for+вложенные шаблоны); код НЕ вендорить — нет лицензии, eval() на данных, привязка к aiogram; писать нейтральную модель + рендер в адаптерах
+- 2026-07-10 — для безопасного продолжения работы с уже существующим ботом нужен
+  read-контракт черновика (`definition` + `row_version`) в Admin API и восстановление
+  layout на фронте. До этого редактор намеренно не предлагает открыть чужой/старый
+  сценарий, чтобы не перезаписать его стартовым шаблоном.
 
 ## Открытые вопросы к команде
 

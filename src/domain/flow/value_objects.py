@@ -20,6 +20,7 @@ class NodeType(enum.StrEnum):
     OPEN_MINI_APP = "open_mini_app"
     SAVE = "save"
     HTTP_REQUEST = "http_request"
+    NOTIFY = "notify"
     CUSTOM_CODE = "custom_code"
 
 

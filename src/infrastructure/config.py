@@ -25,3 +25,4 @@ class Settings(BaseSettings):
     # Пути к dev-хранилищам секретов (сами пути — не секрет; прод — открытый вопрос).
     token_vault_file: str = ".secrets/token-vault.json"  # noqa: S105 — путь к файлу, не пароль
     connection_secrets_file: str = ".secrets/connections.json"
+    notification_targets_file: str = ".secrets/notification-targets.json"

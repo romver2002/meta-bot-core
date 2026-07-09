@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-06
+version: "1.1"
+updated: 2026-07-10
 verified_commit: ""
 owner: ""
 ---
@@ -40,6 +40,7 @@ owner: ""
 | Открытие mini app | Событие запуска mini app пользователем | `MiniAppOpened` | FlowExecution |
 | Состояние пользователя | Текущий шаг пользователя в сценарии и его переменные (FSM). Одно активное состояние на пару (бот, пользователь) | `Session` | FlowExecution |
 | Python-блок | Пользовательская чистая функция `run(context) -> dict` внутри сценария; исполняется изолированно, без доступа к БД, токенам, ФС, env, сети | `CustomCodeBlock` | CodeExecution |
+| Адресат уведомления | Привязка символической роли сценария (`admin`, `developer`, …) к chat_id получателя. Конфигурация бота, не часть сценария: chat_id (потенциальные ПДн) не попадает в Flow | `NotificationTarget` (роль → chat_id за портом) | Constructor |
 | Матрица возможностей | Реестр того, какие возможности доступны на каждой платформе (текст, кнопки, mini app, платежи, авторизация) | `CapabilityMatrix` | PlatformIntegration |
 | Адаптер платформы | Реализация порта `BotPlatformPort` под конкретную платформу: маппинг команд, парсинг update, mini app-авторизация | `TelegramBotAdapter`, `MaxBotAdapter` | PlatformIntegration |
 
@@ -54,6 +55,7 @@ owner: ""
 | `FlowRepository` | Хранение и чтение сценариев (`Flow`) |
 | `SessionRepository` | Хранение состояния пользователя (`Session`) |
 | `TokenVaultPort` | Безопасное хранение и выдача токенов ботов |
+| `NotificationTargetResolverPort` | Резолв роли адресата уведомлений в chat_id платформы (блок `notify`, ADR-0010) |
 | `CodeExecutorPort` | Исполнение Python-блока в изоляции |
 | `FileStoragePort` | Хранение файлов/медиа |
 

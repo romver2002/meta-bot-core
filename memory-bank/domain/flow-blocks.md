@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-07
+version: "1.1"
+updated: 2026-07-10
 verified_commit: ""
 owner: ""
 ---
@@ -50,6 +50,7 @@ ADR [0003](../decisions/0003-flow-engine-blocks-and-sandbox.md). Почему б
 | `open_mini_app` | показывает кнопку запуска mini app, привязанного к боту | ссылка на `MiniApp` (HTTPS, BR-003) | `BotPlatformPort.build_mini_app_button` (Telegram `WebAppInfo` / кнопка MAX) |
 | `save` | сохраняет данные в состояние/во внешнюю систему | ключ, значение/маппинг | `SessionRepository` (переменные) или порт хранилища |
 | `http_request` | вызывает внешний HTTP-API и кладёт ответ в переменные | метод, URL, заголовки, маппинг ответа | инфраструктурный HTTP-клиент за портом (не в ядре) |
+| `notify` | шлёт сообщение третьему лицу — адресату роли (заявка админу и т.п.), best-effort: сбой не рвёт цепочку (ADR [0010](../decisions/0010-notify-block-and-notification-targets.md)) | `to` (символическая роль: `admin`, `developer`, …), `text` (шаблон) | `NotificationTargetResolverPort` (роль → chat_id) + `BotPlatformPort.send_message` |
 | `custom_code` | исполняет пользовательский Python-блок как чистую функцию | `code_id`/версия, `input_mapping`, `output_mapping` | `CodeExecutorPort` → песочница; `run(context) -> dict` (BR-004) |
 
 ## Кнопки (`Button`)

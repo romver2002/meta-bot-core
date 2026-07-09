@@ -201,3 +201,21 @@ class StubSecretResolver:
 
     async def resolve(self, bot_id: str, name: str) -> str | None:
         return self._secrets.get(name)
+
+
+class StubNotificationTargets:
+    """In-memory резолвер и writer адресатов уведомлений.
+
+    ``defaults`` — привязки «роль -> chat_id» для любого бота (удобство тестов);
+    ``store`` пишет изолированно по боту, как реальное хранилище.
+    """
+
+    def __init__(self, targets: dict[str, str] | None = None) -> None:
+        self.defaults = targets or {}
+        self.stored: dict[tuple[str, str], str] = {}
+
+    async def resolve(self, bot_id: str, role: str) -> str | None:
+        return self.stored.get((bot_id, role), self.defaults.get(role))
+
+    async def store(self, bot_id: str, role: str, chat_id: str) -> None:
+        self.stored[(bot_id, role)] = chat_id

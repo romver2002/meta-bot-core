@@ -12,7 +12,7 @@ webhook-роуте), находит бота и его опубликованн�
 4. иначе — матчинг входных триггеров; нераспознанное событие игнорируется.
 
 Поддерживаемые блоки v1: send_message, show_buttons, ask, condition, save,
-open_mini_app, http_request. Остальные типы отклоняются при публикации
+open_mini_app, http_request, notify. Остальные типы отклоняются при публикации
 CapabilityMatrix адаптеров (BR-006); здесь — защита в глубину.
 """
 
@@ -20,16 +20,18 @@ from __future__ import annotations
 
 import dataclasses
 import re
+import unicodedata
 import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from application.errors import BotNotFoundError, FlowExecutionError, FlowNotFoundError
+from application.errors import ApplicationError, BotNotFoundError, FlowExecutionError, FlowNotFoundError
 from application.ports.bot_platform import PlatformFactory, SendMessageCommand
 from application.ports.bot_repository import BotRepository
 from application.ports.connection_secrets import SecretResolverPort
 from application.ports.flow_repository import FlowRepository
 from application.ports.http_client import HttpClientPort
+from application.ports.notification_targets import NotificationTargetResolverPort
 from application.ports.session_repository import SessionRepository
 from application.ports.token_vault import TokenVaultPort
 from domain.bot.value_objects import BotStatus
@@ -44,6 +46,7 @@ MAX_STEPS = 64
 _SECRET_TOKEN = re.compile(r"\{\{secret:([A-Za-z0-9_.-]+)\}\}")
 
 _Send = Callable[[str, tuple[Button, ...]], Awaitable[None]]
+_SendTo = Callable[[str, str], Awaitable[None]]  # (external_chat_id, text) — блок notify
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -80,6 +83,21 @@ def _dig(payload: object, path: str) -> object:
     return current
 
 
+def _flattened(variables: dict[str, object]) -> dict[str, object]:
+    """Гасит спуфинг карточки уведомления пользовательским вводом.
+
+    Переводы строк и управляющие/форматные символы в значениях переменных
+    не должны дорисовывать «поля» карточки админу: перенос -> видимый « ⏎ »,
+    прочие Cc/Cf-символы (bidi-переопределения и т.п.) удаляются.
+    """
+    return {key: _flatten(str(value)) for key, value in variables.items()}
+
+
+def _flatten(value: str) -> str:
+    flat = value.replace("\r\n", " ⏎ ").replace("\n", " ⏎ ").replace("\r", " ⏎ ")
+    return "".join(ch for ch in flat if unicodedata.category(ch) not in {"Cc", "Cf"})
+
+
 def _extract(payload: dict[str, Any], response_map: object) -> dict[str, object]:
     """Маппит поля ответа в переменные сценария по response_map."""
     result: dict[str, object] = {}
@@ -105,6 +123,7 @@ class ProcessUpdateUseCase:
         platform_factory: PlatformFactory,
         http_client: HttpClientPort,
         secrets: SecretResolverPort,
+        notifications: NotificationTargetResolverPort,
     ) -> None:
         self._bots = bots
         self._flows = flows
@@ -113,6 +132,7 @@ class ProcessUpdateUseCase:
         self._platform_factory = platform_factory
         self._http_client = http_client
         self._secrets = secrets
+        self._notifications = notifications
 
     async def execute(self, event: IncomingEvent) -> None:
         bot = await self._bots.get(event.bot_id)
@@ -151,11 +171,18 @@ class ProcessUpdateUseCase:
                 )
             )
 
+        async def send_to(chat_id: str, text: str) -> None:
+            await platform.send_message(
+                SendMessageCommand(bot_token=token, external_chat_id=chat_id, text=text, buttons=())
+            )
+
         route = self._route(flow, session, event)
         if route is None:
             return  # нераспознанное событие — сценарий не трогаем
 
-        chain_ended = await self._run_chain(flow, route.start_node_id, session, send, bot.id, mini_app_url)
+        chain_ended = await self._run_chain(
+            flow, route.start_node_id, session, send, send_to, bot.id, mini_app_url
+        )
         if chain_ended:
             # Сценарий дошёл до конца: пара (Bot, user) свободна, следующий
             # триггер начнёт новую сессию на актуальной версии (ADR-0008).
@@ -218,6 +245,7 @@ class ProcessUpdateUseCase:
         start_node_id: str | None,
         session: Session,
         send: _Send,
+        send_to: _SendTo,
         bot_id: str,
         mini_app_url: str | None,
     ) -> bool:
@@ -261,6 +289,9 @@ class ProcessUpdateUseCase:
                 if target is None and http_outcome != "next":
                     target = self._transition_target(flow, node.id, "next")
                 node_id = target
+            elif node.type is NodeType.NOTIFY:
+                await self._execute_notify(node.params, session, bot_id, send_to)
+                node_id = self._transition_target(flow, node.id, "next")
             elif node.type is NodeType.CONDITION:
                 outcome = evaluate_condition(str(node.params.get("expression", "")), session.variables)
                 node_id = self._transition_target(flow, node.id, "true" if outcome else "false")
@@ -272,7 +303,31 @@ class ProcessUpdateUseCase:
                 node_id = self._transition_target(flow, node.id, "next")
             else:
                 raise FlowExecutionError(f"Блок {node.type} ещё не поддерживается движком (отклоняется BR-006)")
+        if node_id is None:
+            return True  # цепочка закончилась ровно на лимите — это не цикл
         raise FlowExecutionError(f"Превышен лимит {MAX_STEPS} шагов — вероятен цикл в сценарии {flow.id!r}")
+
+    # ── notify ───────────────────────────────────────────────────────────────
+
+    async def _execute_notify(
+        self, params: dict[str, object], session: Session, bot_id: str, send_to: _SendTo
+    ) -> None:
+        """Best-effort доставка третьему лицу (ADR-0010).
+
+        Ничто здесь не важнее ответа пользователю: непривязанная роль, пустой
+        текст, сбой резолва хранилища или доставки (ApplicationError — контракты
+        портов) не прерывают цепочку. Гарантированная доставка (outbox) — вне v1.
+        """
+        role = params.get("to")
+        text = render_text(str(params.get("text", "")), _flattened(session.variables))
+        if not isinstance(role, str) or not role or not text:
+            return
+        try:
+            chat_id = await self._notifications.resolve(bot_id, role)
+            if chat_id is not None:
+                await send_to(chat_id, text)
+        except ApplicationError:
+            return
 
     # ── http_request ─────────────────────────────────────────────────────────
 
