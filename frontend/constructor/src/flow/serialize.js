@@ -1,15 +1,34 @@
-import { BLOCK_BY_TYPE, PLATFORMS, blockAvailable } from '../domain/catalog.js'
+import { BLOCK_BY_TYPE, PLATFORMS, TRIGGER_BY_TYPE, blockAvailable } from '../domain/catalog.js'
+import { buttonHandleId, isButtonEdge } from './handles.js'
 
 export const DOC_SCHEMA_VERSION = 1
 
-const TRANSITIONAL_BLOCKS = new Set(['send_message', 'ask', 'condition', 'open_mini_app', 'save', 'http_request'])
+const TRANSITIONAL_BLOCKS = new Set([
+  'send_message',
+  'ask',
+  'condition',
+  'open_mini_app',
+  'save',
+  'http_request',
+  'notify',
+])
+
+const BUTTON_ACTIONS = new Set(['next', 'callback', 'open_mini_app', 'url'])
 
 export function serializeFlow(nodes, edges, meta) {
+  return {
+    bot: { name: meta.botName, platform: meta.platform },
+    definition: serializeDefinition(nodes, edges),
+  }
+}
+
+export function serializeDefinition(nodes, edges) {
   const triggerNodes = nodes.filter((node) => node.data.group === 'trigger')
   const blockNodes = nodes.filter((node) => node.data.group === 'block')
   const blockIds = new Set(blockNodes.map((node) => node.id))
+  const nodeById = new Map(nodes.map((node) => [node.id, node]))
 
-  const definition = {
+  return {
     doc_schema_version: DOC_SCHEMA_VERSION,
     triggers: triggerNodes.map((trigger) => ({
       id: trigger.id,
@@ -29,33 +48,37 @@ export function serializeFlow(nodes, edges, meta) {
     })),
     transitions: edges
       .filter((edge) => blockIds.has(edge.source) && blockIds.has(edge.target))
-      .filter((edge) => TRANSITIONAL_BLOCKS.has(nodes.find((node) => node.id === edge.source)?.data.type))
+      .filter((edge) => !isButtonEdge(edge))
+      .filter((edge) => TRANSITIONAL_BLOCKS.has(nodeById.get(edge.source)?.data.type))
       .map((edge) => ({
         source_node_id: edge.source,
         target_node_id: edge.target,
         on: edge.sourceHandle || 'next',
       })),
   }
-
-  return {
-    bot: { name: meta.botName, platform: meta.platform },
-    definition,
-  }
 }
 
-export function validateFlow(nodes, edges, platformId) {
+export function validateFlow(nodes, edges, platformId, options = {}) {
+  const { requireMiniApp = false, miniAppAttached = false } = options
   const problems = []
   const triggerNodes = nodes.filter((node) => node.data.group === 'trigger')
   const blockNodes = nodes.filter((node) => node.data.group === 'block')
+  const nodeById = new Map(nodes.map((node) => [node.id, node]))
   const blockIds = new Set(blockNodes.map((node) => node.id))
   const triggerIds = new Set(triggerNodes.map((node) => node.id))
 
-  if (triggerNodes.length === 0) problems.push('Нет ни одного триггера входа (BR-001)')
-  if (blockNodes.length === 0) problems.push('Сценарий пуст — добавьте хотя бы один блок (BR-001)')
+  if (triggerNodes.length === 0) addProblem(problems, 'Добавьте хотя бы один вход в сценарий (BR-001)')
+  if (blockNodes.length === 0) addProblem(problems, 'Сценарий пуст — добавьте хотя бы один блок (BR-001)')
 
   for (const trigger of triggerNodes) {
-    const target = edges.find((edge) => edge.source === trigger.id)?.target
-    if (!target || !blockIds.has(target)) problems.push(`Триггер ${trigger.id} не ведёт в существующий блок`)
+    const outgoing = edges.filter((edge) => edge.source === trigger.id)
+    const target = outgoing[0]?.target
+    if (!target || !blockIds.has(target)) {
+      addProblem(problems, `${triggerLabel(trigger)} не связан с существующим блоком`, trigger.id)
+    }
+    if (outgoing.length > 1) {
+      addProblem(problems, `${triggerLabel(trigger)} должен вести только в один блок`, trigger.id)
+    }
   }
 
   const callbackPayloads = new Set(
@@ -68,33 +91,55 @@ export function validateFlow(nodes, edges, platformId) {
   for (const node of blockNodes) {
     const def = BLOCK_BY_TYPE[node.data.type]
     if (!def) {
-      problems.push(`Неизвестный блок ${node.data.type}`)
+      addProblem(problems, `${nodeLabel(node)}: неизвестный тип блока`, node.id)
       continue
     }
-    if (!blockAvailable(def, platformId)) problems.push(`Блок ${def.label} недоступен на ${PLATFORMS[platformId]?.label || platformId} (BR-006)`)
-    if (node.data.type === 'custom_code') problems.push('custom_code не входит в Engine v1 capabilities')
+    if (!blockAvailable(def, platformId)) {
+      addProblem(problems, `${nodeLabel(node)} недоступен на ${PLATFORMS[platformId]?.label || platformId} (BR-006)`, node.id)
+    }
+    if (node.data.type === 'custom_code') {
+      addProblem(problems, `${nodeLabel(node)} пока не поддерживается Flow Engine`, node.id)
+    }
 
     const normalized = normalizeParams(node.data.type, node.data.params)
-    problems.push(...normalized.problems.map((problem) => `${node.id}: ${problem}`))
+    for (const message of normalized.problems) addProblem(problems, `${nodeLabel(node)}: ${message}`, node.id)
 
     for (const field of def.fields || []) {
+      if (field.kind === 'buttons') continue
       if (field.required && !String(node.data.params[field.key] ?? '').trim()) {
-        problems.push(`${node.id}: заполните поле «${field.label}»`)
+        addProblem(problems, `${nodeLabel(node)}: заполните «${field.label}»`, node.id)
       }
     }
 
-    for (const [index, button] of (node.data.params.buttons || []).entries()) {
-      const prefix = `${node.id}: кнопка ${index + 1}`
-      if (!String(button.label || '').trim()) problems.push(`${prefix} без подписи`)
-      if (!button.target) problems.push(`${prefix} без target`)
+    const buttons = Array.isArray(node.data.params.buttons) ? node.data.params.buttons : []
+    if (node.data.type === 'show_buttons' && buttons.length === 0) {
+      addProblem(problems, `${nodeLabel(node)}: добавьте хотя бы одну кнопку`, node.id)
+    }
+
+    for (const [index, button] of buttons.entries()) {
+      const prefix = `${nodeLabel(node)}: кнопка «${button.label || index + 1}»`
+      if (!String(button.label || '').trim()) addProblem(problems, `${prefix} без подписи`, node.id)
+      if (!BUTTON_ACTIONS.has(button.action)) {
+        addProblem(problems, `${prefix}: неизвестное действие`, node.id)
+        continue
+      }
+      if (!button.target) addProblem(problems, `${prefix}: укажите назначение`, node.id)
       if (button.action === 'next' && button.target && !blockIds.has(button.target)) {
-        problems.push(`${prefix} ведёт в несуществующий блок ${button.target}`)
+        addProblem(problems, `${prefix} ведёт в отсутствующий блок`, node.id)
+      }
+      if (button.action === 'next' && button.target && blockIds.has(button.target)) {
+        const visible = edges.some((edge) => (
+          edge.source === node.id
+          && edge.sourceHandle === buttonHandleId(index)
+          && edge.target === button.target
+        ))
+        if (!visible) addProblem(problems, `${prefix}: добавьте связь на холсте`, node.id)
       }
       if (button.action === 'callback' && button.target && !callbackPayloads.has(button.target)) {
-        problems.push(`${prefix}: нет callback-триггера с payload=${button.target}`)
+        addProblem(problems, `${prefix}: нет входа «Нажатие кнопки» с payload «${button.target}»`, node.id)
       }
       if ((button.action === 'url' || button.action === 'open_mini_app') && button.target && !button.target.startsWith('https://')) {
-        problems.push(`${prefix}: URL должен начинаться с https://`)
+        addProblem(problems, `${prefix}: URL должен начинаться с https://`, node.id)
       }
     }
   }
@@ -102,19 +147,42 @@ export function validateFlow(nodes, edges, platformId) {
   const outcomes = new Set()
   for (const edge of edges) {
     if (triggerIds.has(edge.source)) continue
-    if (!blockIds.has(edge.source) || !blockIds.has(edge.target)) continue
-    const source = nodes.find((node) => node.id === edge.source)
-    if (!TRANSITIONAL_BLOCKS.has(source?.data.type)) {
-      problems.push(`${edge.source}: этот блок не использует transition; задайте target у кнопки`)
+    if (!blockIds.has(edge.source) || !blockIds.has(edge.target)) {
+      addProblem(problems, 'Связь должна соединять два существующих блока', edge.source)
       continue
     }
-    const outcome = `${edge.source}:${edge.sourceHandle || 'next'}`
-    if (outcomes.has(outcome)) problems.push(`${edge.source}: больше одного transition для исхода ${edge.sourceHandle || 'next'}`)
-    outcomes.add(outcome)
+    if (isButtonEdge(edge)) continue
+
+    const source = nodeById.get(edge.source)
+    const sourceType = source?.data.type
+    if (!TRANSITIONAL_BLOCKS.has(sourceType)) {
+      addProblem(problems, `${nodeLabel(source)}: переход задаётся через кнопку`, edge.source)
+      continue
+    }
+    const outcome = edge.sourceHandle || 'next'
+    const allowedOutcomes = BLOCK_BY_TYPE[sourceType]?.outputs || []
+    if (!allowedOutcomes.includes(outcome)) {
+      addProblem(problems, `${nodeLabel(source)}: недопустимый исход «${outcome}»`, edge.source)
+      continue
+    }
+    const key = `${edge.source}:${outcome}`
+    if (outcomes.has(key)) {
+      addProblem(problems, `${nodeLabel(source)}: для исхода «${outcome}» может быть только один переход`, edge.source)
+    }
+    outcomes.add(key)
   }
 
-  const unreachable = findUnreachable(nodes, edges)
-  if (unreachable.length > 0) problems.push(`Недостижимые узлы: ${unreachable.join(', ')}`)
+  if (requireMiniApp && !miniAppAttached) {
+    const miniAppNode = blockNodes.find((node) => node.data.type === 'open_mini_app')
+    if (miniAppNode) {
+      addProblem(problems, 'Перед публикацией привяжите к боту Mini App с HTTPS-адресом', miniAppNode.id)
+    }
+  }
+
+  const unreachable = findUnreachable(blockNodes, triggerNodes, edges)
+  if (unreachable.length > 0) {
+    addProblem(problems, `Недостижимые блоки: ${unreachable.map((id) => nodeLabel(nodeById.get(id))).join(', ')}`)
+  }
 
   return { ok: problems.length === 0, problems }
 }
@@ -156,36 +224,48 @@ function parseJson(raw, field) {
   }
 }
 
-function cleanObject(value) {
-  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined && item !== null && item !== ''))
-}
-
-function findUnreachable(nodes, edges) {
-  const blockNodes = nodes.filter((node) => node.data.group === 'block')
+function findUnreachable(blockNodes, triggerNodes, edges) {
   const blockIds = new Set(blockNodes.map((node) => node.id))
-  const adjacency = Object.fromEntries(blockNodes.map((node) => [node.id, new Set()]))
+  const adjacency = new Map(blockNodes.map((node) => [node.id, new Set()]))
   const queue = []
 
   for (const edge of edges) {
-    if (blockIds.has(edge.source) && blockIds.has(edge.target)) adjacency[edge.source]?.add(edge.target)
-    if (nodes.find((node) => node.id === edge.source)?.data.group === 'trigger' && blockIds.has(edge.target)) queue.push(edge.target)
+    if (blockIds.has(edge.source) && blockIds.has(edge.target)) adjacency.get(edge.source).add(edge.target)
+    if (triggerNodes.some((node) => node.id === edge.source) && blockIds.has(edge.target)) queue.push(edge.target)
   }
-
   for (const node of blockNodes) {
     for (const button of node.data.params.buttons || []) {
-      if (button.action === 'next' && blockIds.has(button.target)) adjacency[node.id].add(button.target)
+      if (button.action === 'next' && blockIds.has(button.target)) adjacency.get(node.id).add(button.target)
     }
   }
 
   const visited = new Set()
-  while (queue.length > 0) {
-    const id = queue.shift()
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const id = queue[cursor]
     if (visited.has(id)) continue
     visited.add(id)
-    for (const next of adjacency[id] || []) {
+    for (const next of adjacency.get(id) || []) {
       if (!visited.has(next)) queue.push(next)
     }
   }
-
   return [...blockIds].filter((id) => !visited.has(id)).sort()
+}
+
+function addProblem(problems, message, nodeId = null) {
+  problems.push({ message, nodeId })
+}
+
+function nodeLabel(node) {
+  if (!node) return 'Блок'
+  const def = BLOCK_BY_TYPE[node.data?.type]
+  return `«${def?.label || node.data?.type || node.id}»`
+}
+
+function triggerLabel(trigger) {
+  const def = TRIGGER_BY_TYPE[trigger.data.type]
+  return `Вход «${def?.label || trigger.data.type}»`
+}
+
+function cleanObject(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined && item !== null && item !== ''))
 }

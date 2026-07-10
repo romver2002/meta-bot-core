@@ -1,200 +1,304 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 import {
   attachMiniApp,
   createBot,
-  getBot,
   publishBot,
   saveFlowDraft,
   setConnectionSecret,
+  setNotificationTarget,
 } from '../api/adminApi.js'
 
-function Status({ state }) {
+function Status({ state, onDismiss }) {
   if (!state.message) return null
+  const isError = state.kind === 'bad'
   return (
-    <div className={`apiStatus apiStatus--${state.kind}`}>
-      {state.message}
+    <div className={`apiStatus apiStatus--${state.kind}`} role={isError ? 'alert' : 'status'} aria-live={isError ? 'assertive' : 'polite'}>
+      <span className="apiStatus__message">{state.message}</span>
+      <button className="icon-btn apiStatus__dismiss" type="button" onClick={onDismiss} aria-label="Закрыть сообщение">✕</button>
     </div>
   )
 }
 
-function Field({ label, children }) {
+function Field({ label, children, hint }) {
   return (
     <label className="apiField">
       <span>{label}</span>
       {children}
+      {hint && <small>{hint}</small>}
     </label>
   )
 }
 
-function Section({ title, children, open = false }) {
+function Section({ title, children, open = false, note }) {
   return (
     <details className="apiSection" open={open}>
       <summary>{title}</summary>
-      <div className="apiSection__body">{children}</div>
+      <div className="apiSection__body">
+        {note && <p className="apiSection__note">{note}</p>}
+        {children}
+      </div>
     </details>
   )
 }
 
-export default function ApiPanel({ flow, validation, botName, platform }) {
-  const [baseUrl, setBaseUrl] = useState('')
-  const [botId, setBotId] = useState('')
+function messages(validation) {
+  return validation.problems.map((problem) => problem.message).join('; ')
+}
+
+function platformName(platform) {
+  return platform === 'max' ? 'MAX' : 'Telegram'
+}
+
+function allowedApiOrigin(baseUrl) {
+  const value = baseUrl.trim()
+  if (!value || value.startsWith('/')) return true
+  try {
+    const url = new URL(value, window.location.origin)
+    return url.origin === window.location.origin || ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+  } catch {
+    return false
+  }
+}
+
+function ValidationSummary({ validation, onCheck }) {
+  if (validation.ok) return null
+  return (
+    <div className="apiPanel__validation" role="alert">
+      <strong>Нужно исправить: {validation.problems.length}</strong>
+      <ul>
+        {validation.problems.map((problem, index) => <li key={`${problem.message}-${index}`}>{problem.message}</li>)}
+      </ul>
+      <button className="apiPanel__problem" type="button" onClick={onCheck}>Показать на схеме</button>
+    </div>
+  )
+}
+
+function readableError(error) {
+  const message = error instanceof Error ? error.message : 'Неизвестная ошибка. Повторите попытку.'
+  return error?.status === 409 || /row_version|черновик.*измен/i.test(message)
+    ? 'Черновик изменён в другом сеансе. Сохранение остановлено, чтобы не потерять данные.'
+    : message
+}
+
+export default function ApiPanel({
+  flow,
+  validation,
+  publishValidation,
+  botName,
+  platform,
+  session,
+  onSessionChange,
+  onConnected,
+  onSaved,
+  onPublished,
+  isDirty,
+  onCheck,
+}) {
   const [botToken, setBotToken] = useState('')
-  const [rowVersion, setRowVersion] = useState(null)
-  const [flowId, setFlowId] = useState('')
-  const [miniAppUrl, setMiniAppUrl] = useState('')
-  const [miniAppTitle, setMiniAppTitle] = useState('')
-  const [secretName, setSecretName] = useState('openrouter_api_key')
+  const [secretName, setSecretName] = useState('integration_api_key')
   const [secretValue, setSecretValue] = useState('')
-  const [busy, setBusy] = useState(null)
-  const [status, setStatus] = useState({ kind: 'idle', message: '' })
+  const activeOperationRef = useRef(false)
+  const patchSession = (patch) => onSessionChange((current) => ({ ...current, ...patch }))
+  const isConnected = Boolean(session.botId)
+  const isBusy = Boolean(session.busy)
+  const usesHttp = flow.definition.nodes.some((node) => node.type === 'http_request')
+  const usesNotify = flow.definition.nodes.some((node) => node.type === 'notify')
 
   const run = async (name, action) => {
-    setBusy(name)
-    setStatus({ kind: 'idle', message: '' })
+    if (activeOperationRef.current) return
+    activeOperationRef.current = true
+    patchSession({ busy: name, apiStatus: { kind: 'idle', message: '' } })
     try {
-      const result = await action()
-      setStatus({ kind: 'ok', message: result })
+      const message = await action()
+      patchSession({ apiStatus: { kind: 'ok', message } })
     } catch (error) {
-      setStatus({ kind: 'bad', message: error.message })
+      patchSession({ apiStatus: { kind: 'bad', message: readableError(error) } })
     } finally {
-      setBusy(null)
+      activeOperationRef.current = false
+      patchSession({ busy: null })
     }
   }
 
-  const create = () => run('create', async () => {
-    if (!botToken.trim()) throw new Error('Нужен токен уже созданного бота')
-    const bot = await createBot(baseUrl, {
-      name: botName,
+  const connect = () => run('connect', async () => {
+    if (!botToken.trim()) throw new Error('Введите токен уже зарегистрированного бота')
+    if (!allowedApiOrigin(session.baseUrl)) {
+      throw new Error('В целях безопасности токен можно отправить только на текущий сайт или локальный API.')
+    }
+    const bot = await createBot(session.baseUrl, {
+      name: botName.trim() || 'Новый бот',
       platform,
       token: botToken,
     })
-    setBotId(bot.id)
     setBotToken('')
-    setRowVersion(null)
-    return `Бот создан: ${bot.id}`
-  })
-
-  const load = () => run('load', async () => {
-    if (!botId.trim()) throw new Error('Укажите bot_id')
-    const bot = await getBot(baseUrl, botId.trim())
-    setFlowId(bot.flow_id || '')
-    return `Статус бота: ${bot.status}`
+    onConnected(bot)
+    return `Бот подключён к конструктору. Теперь сохраните сценарий.`
   })
 
   const save = () => run('save', async () => {
-    if (!botId.trim()) throw new Error('Укажите bot_id')
-    if (!validation.ok) throw new Error(`Сначала исправьте: ${validation.problems.join('; ')}`)
-    const saved = await saveFlowDraft(baseUrl, botId.trim(), {
+    if (!isConnected) throw new Error('Сначала подключите уже зарегистрированного бота')
+    if (!validation.ok) throw new Error(`Исправьте сценарий: ${messages(validation)}`)
+    const saved = await saveFlowDraft(session.baseUrl, session.botId, {
       definition: flow.definition,
-      row_version: rowVersion,
-      name: botName,
+      row_version: session.rowVersion,
+      name: botName.trim(),
     })
-    setFlowId(saved.flow_id)
-    setRowVersion(saved.row_version)
-    return `Черновик сохранён, row_version=${saved.row_version}`
+    onSaved(saved)
+    return 'Черновик сценария сохранён'
   })
 
   const publish = () => run('publish', async () => {
-    if (!botId.trim()) throw new Error('Укажите bot_id')
-    if (!validation.ok) throw new Error(`Сначала исправьте: ${validation.problems.join('; ')}`)
-    const result = await publishBot(baseUrl, botId.trim())
-    return `Опубликовано: ${result.bot.status}`
+    if (!isConnected) throw new Error('Сначала подключите уже зарегистрированного бота')
+    if (!publishValidation.ok) throw new Error(`Пока нельзя публиковать: ${messages(publishValidation)}`)
+    if (session.rowVersion === null || isDirty) throw new Error('Сначала сохраните текущую версию сценария')
+    const result = await publishBot(session.baseUrl, session.botId)
+    onPublished(result.bot)
+    return 'Сценарий опубликован и бот активирован'
   })
 
   const attach = () => run('miniapp', async () => {
-    if (!botId.trim()) throw new Error('Укажите bot_id')
-    if (!miniAppUrl.trim().startsWith('https://')) throw new Error('Mini app URL должен начинаться с https://')
-    await attachMiniApp(baseUrl, botId.trim(), {
-      url: miniAppUrl.trim(),
-      title: miniAppTitle.trim(),
+    if (!isConnected) throw new Error('Сначала подключите бота')
+    if (!session.miniAppUrl.trim().startsWith('https://')) throw new Error('Адрес Mini App должен начинаться с https://')
+    await attachMiniApp(session.baseUrl, session.botId, {
+      url: session.miniAppUrl.trim(),
+      title: session.miniAppTitle.trim(),
     })
-    return 'Mini app привязана к боту'
+    patchSession({ miniAppAttached: true })
+    return 'Mini App привязана к боту'
   })
 
   const saveSecret = () => run('secret', async () => {
-    if (!botId.trim()) throw new Error('Укажите bot_id')
+    if (!isConnected) throw new Error('Сначала подключите бота')
     if (!secretName.trim()) throw new Error('Укажите имя секрета')
-    if (!secretValue) throw new Error('Укажите значение секрета')
-    await setConnectionSecret(baseUrl, botId.trim(), secretName.trim(), secretValue)
+    if (!secretValue) throw new Error('Введите значение секрета')
+    await setConnectionSecret(session.baseUrl, session.botId, secretName.trim(), secretValue)
     setSecretValue('')
-    return `Секрет подключения сохранён: ${secretName.trim()}`
+    return `Секрет «${secretName.trim()}» сохранён вне сценария`
   })
 
-  const disabledByValidation = !validation.ok
+  const saveNotificationTarget = () => run('notify', async () => {
+    if (!isConnected) throw new Error('Сначала подключите бота')
+    if (!session.notificationRole.trim()) throw new Error('Укажите роль адресата')
+    if (!session.notificationChatId.trim()) throw new Error('Укажите chat ID адресата')
+    await setNotificationTarget(
+      session.baseUrl,
+      session.botId,
+      session.notificationRole.trim(),
+      session.notificationChatId.trim(),
+    )
+    return `Адресат роли «${session.notificationRole.trim()}» сохранён`
+  })
+
+  const publishDisabled = (
+    isBusy
+    || !isConnected
+    || !publishValidation.ok
+    || session.rowVersion === null
+    || isDirty
+  )
 
   return (
     <aside className="apiPanel">
       <div className="apiPanel__head">
         <div>
-          <div className="apiPanel__title">Боты и публикация</div>
+          <div className="apiPanel__title">Публикация сценария</div>
           <div className="apiPanel__meta">
-            {flowId ? `flow ${flowId}` : 'draft not saved'} · row {rowVersion ?? 'new'}
+            {isConnected ? `Бот подключён · ${session.status === 'published' ? 'опубликован' : 'черновик'}` : 'Подключите бота, затем сохраните и опубликуйте сценарий'}
           </div>
         </div>
-        <button className="btn btn--ghost" onClick={load} disabled={busy === 'load' || !botId.trim()}>
-          Обновить
-        </button>
       </div>
+      <Status state={session.apiStatus} onDismiss={() => patchSession({ apiStatus: { kind: 'idle', message: '' } })} />
 
-      <div className="apiGrid">
-        <Field label="bot_id">
-          <input value={botId} onChange={(event) => setBotId(event.target.value)} placeholder="после create или из API" />
-        </Field>
-        <Field label="row_version">
-          <input value={rowVersion ?? ''} onChange={(event) => setRowVersion(event.target.value ? Number(event.target.value) : null)} placeholder="new" />
-        </Field>
-      </div>
+      <Section
+        title={isConnected ? '1. Бот подключён' : '1. Подключите зарегистрированного бота'}
+        open={!isConnected}
+        note="Конструктор не создаёт аккаунт бота в Telegram или MAX. Он подключает уже выданный токен к сценарию."
+      >
+        {isConnected ? (
+          <div className="connectionCard">
+            <strong>Подключённый бот</strong>
+            <span>{session.connectedBotName || 'Имя доступно в настройках платформы'} · {platformName(platform)} · платформа закреплена</span>
+          </div>
+        ) : (
+          <>
+            <Field label="Токен уже зарегистрированного бота" hint="Токен используется только для подключения и не попадает в Flow.">
+              <input type="password" value={botToken} onChange={(event) => setBotToken(event.target.value)} placeholder="Вставьте токен бота" autoComplete="off" />
+            </Field>
+            <button className="btn btn--secondary" type="button" onClick={connect} disabled={isBusy || !botToken.trim()}>
+              Подключить {platformName(platform)}-бота
+            </button>
+          </>
+        )}
+      </Section>
 
-      <div className="apiActions">
-        <button className="btn btn--secondary" onClick={save} disabled={busy === 'save' || disabledByValidation || !botId.trim()}>
-          Сохранить draft
-        </button>
-        <button className="btn btn--primary" onClick={publish} disabled={busy === 'publish' || disabledByValidation || !botId.trim()}>
-          Опубликовать
-        </button>
-      </div>
+      <Section title="2. Сохраните черновик" open={isConnected} note="Сохраняется только описание Flow. Перемещения узлов не меняют опубликованную логику.">
+        <div className="apiActions apiActions--single">
+          <button className="btn btn--secondary" type="button" onClick={save} disabled={isBusy || !isConnected || !validation.ok || (!isDirty && session.rowVersion !== null)}>
+            {session.rowVersion === null ? 'Сохранить сценарий' : isDirty ? 'Сохранить изменения' : 'Черновик сохранён'}
+          </button>
+        </div>
+        <ValidationSummary validation={validation} onCheck={onCheck} />
+      </Section>
 
-      <Section title="Создать бота">
-        <Field label="токен бота">
-          <input type="password" value={botToken} onChange={(event) => setBotToken(event.target.value)} placeholder="не сохраняется во фронте" />
+      <Section
+        title="3. Публикация"
+        open={isConnected && publishValidation.ok}
+        note="Перед публикацией проверяются структура Flow, возможности платформы и обязательные зависимости."
+      >
+        <div className="apiActions apiActions--single">
+          <button className="btn btn--primary" type="button" onClick={publish} disabled={publishDisabled}>
+            {session.status === 'published' ? 'Опубликовать новую версию' : 'Опубликовать сценарий'}
+          </button>
+        </div>
+        {isDirty && session.rowVersion !== null && <p className="apiPanel__warning">Есть несохранённые изменения — сначала сохраните черновик.</p>}
+        {isConnected && <ValidationSummary validation={publishValidation} onCheck={onCheck} />}
+      </Section>
+
+      <Section title="Mini App" note="Нужно только если в сценарии есть блок «Открыть mini app». URL проверяется на HTTPS.">
+        <Field label="HTTPS-адрес">
+          <input value={session.miniAppUrl} onChange={(event) => patchSession({ miniAppUrl: event.target.value, miniAppAttached: false })} placeholder="https://app.example.com" />
         </Field>
-        <button className="btn btn--secondary" onClick={create} disabled={busy === 'create' || !botToken.trim()}>
-          Создать бота
+        <Field label="Название (необязательно)">
+          <input value={session.miniAppTitle} onChange={(event) => patchSession({ miniAppTitle: event.target.value })} placeholder="Витрина" />
+        </Field>
+        <button className="btn btn--secondary" type="button" onClick={attach} disabled={isBusy || !isConnected || !session.miniAppUrl.trim()}>
+          {session.miniAppAttached ? 'Mini App привязана' : 'Привязать Mini App'}
         </button>
       </Section>
 
-      <Section title="Mini app">
-        <Field label="HTTPS URL">
-          <input value={miniAppUrl} onChange={(event) => setMiniAppUrl(event.target.value)} placeholder="https://app.example.com" />
-        </Field>
-        <Field label="title">
-          <input value={miniAppTitle} onChange={(event) => setMiniAppTitle(event.target.value)} placeholder="Витрина" />
-        </Field>
-        <button className="btn btn--secondary" onClick={attach} disabled={busy === 'miniapp' || !botId.trim() || !miniAppUrl.trim()}>
-          Привязать mini app
-        </button>
-      </Section>
+      {usesNotify && (
+        <Section title="Адресат уведомлений" note="Роль остаётся в Flow, а chat ID хранится отдельно от сценария.">
+          <Field label="Роль из блока «Уведомить команду»">
+            <input value={session.notificationRole} onChange={(event) => patchSession({ notificationRole: event.target.value })} placeholder="sales" />
+          </Field>
+          <Field label="Chat ID адресата">
+            <input value={session.notificationChatId} onChange={(event) => patchSession({ notificationChatId: event.target.value })} placeholder="Например, 123456789" />
+          </Field>
+          <button className="btn btn--secondary" type="button" onClick={saveNotificationTarget} disabled={isBusy || !isConnected}>
+            Сохранить адресата
+          </button>
+        </Section>
+      )}
 
-      <Section title="Секреты подключений">
-        <Field label="name">
-          <input value={secretName} onChange={(event) => setSecretName(event.target.value)} placeholder="openrouter_api_key" />
-        </Field>
-        <Field label="value">
-          <input type="password" value={secretValue} onChange={(event) => setSecretValue(event.target.value)} placeholder="значение не попадает в Flow" />
-        </Field>
-        <button className="btn btn--secondary" onClick={saveSecret} disabled={busy === 'secret' || !botId.trim() || !secretValue}>
-          Сохранить секрет
-        </button>
-      </Section>
+      {usesHttp && (
+        <Section title="Секреты интеграций" note="Укажите имя в блоке как {{secret:имя}}. Значение не попадёт в Flow, JSON или журнал конструктора.">
+          <Field label="Имя секрета">
+            <input value={secretName} onChange={(event) => setSecretName(event.target.value)} placeholder="crm_api_key" autoComplete="off" />
+          </Field>
+          <Field label="Значение">
+            <input type="password" value={secretValue} onChange={(event) => setSecretValue(event.target.value)} placeholder="Введите значение" autoComplete="off" />
+          </Field>
+          <button className="btn btn--secondary" type="button" onClick={saveSecret} disabled={isBusy || !isConnected || !secretValue}>
+            Сохранить секрет
+          </button>
+        </Section>
+      )}
 
-      <Section title="Подключение к API">
-        <Field label="API base">
-          <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="/ через Vite proxy" />
+      <Section title="Для разработки">
+        <Field label="Базовый URL API" hint="Пустое значение использует Vite proxy. Токен можно отправить только на текущий сайт или localhost.">
+          <input value={session.baseUrl} onChange={(event) => patchSession({ baseUrl: event.target.value })} placeholder="/" />
         </Field>
       </Section>
-
-      <Status state={status} />
     </aside>
   )
 }

@@ -28,7 +28,7 @@ function targetLabel(node) {
   return `${node.id} · ${def?.label || node.data.type}`
 }
 
-function ButtonsField({ value = [], onChange, nodes, ownerId }) {
+function ButtonsField({ value = [], onChange, nodes, ownerId, label }) {
   const items = Array.isArray(value) ? value : []
   const nodeOptions = nodes.filter((node) => node.data.group === 'block' && node.id !== ownerId)
   const patch = (index, key, nextValue) => {
@@ -42,19 +42,19 @@ function ButtonsField({ value = [], onChange, nodes, ownerId }) {
       {items.map((button, index) => (
         <div className="btnsField__item" key={index}>
           <div className="btnsField__row">
-            <input value={button.label ?? ''} onChange={(event) => patch(index, 'label', event.target.value)} placeholder="Подпись" />
-            <select value={button.action ?? 'next'} onChange={(event) => patch(index, 'action', event.target.value)}>
-              <option value="next">next → node</option>
-              <option value="callback">callback payload</option>
-              <option value="open_mini_app">open mini app URL</option>
-              <option value="url">external URL</option>
+            <input value={button.label ?? ''} onChange={(event) => patch(index, 'label', event.target.value)} placeholder="Подпись" aria-label={`${label}: подпись кнопки ${index + 1}`} />
+            <select value={button.action ?? 'next'} onChange={(event) => patch(index, 'action', event.target.value)} aria-label={`${label}: действие кнопки ${index + 1}`}>
+              <option value="next">Перейти к блоку</option>
+              <option value="callback">Вызвать вход по payload</option>
+              <option value="open_mini_app">Открыть Mini App по URL</option>
+              <option value="url">Открыть внешнюю ссылку</option>
             </select>
-            <button className="icon-btn" onClick={() => del(index)} title="Удалить кнопку">✕</button>
+            <button className="icon-btn" type="button" onClick={() => del(index)} title="Удалить кнопку" aria-label={`Удалить кнопку ${index + 1}`}>✕</button>
           </div>
 
           {button.action === 'next' ? (
-            <select className="btnsField__target" value={button.target ?? ''} onChange={(event) => patch(index, 'target', event.target.value)}>
-              <option value="">— target node —</option>
+            <select className="btnsField__target" value={button.target ?? ''} onChange={(event) => patch(index, 'target', event.target.value)} aria-label={`${label}: следующий блок для кнопки ${index + 1}`}>
+              <option value="">— выберите следующий блок —</option>
               {nodeOptions.map((node) => <option key={node.id} value={node.id}>{targetLabel(node)}</option>)}
             </select>
           ) : (
@@ -62,12 +62,13 @@ function ButtonsField({ value = [], onChange, nodes, ownerId }) {
               className="btnsField__target"
               value={button.target ?? ''}
               onChange={(event) => patch(index, 'target', event.target.value)}
-              placeholder={button.action === 'url' || button.action === 'open_mini_app' ? 'https://...' : 'payload'}
+              placeholder={button.action === 'url' || button.action === 'open_mini_app' ? 'https://...' : 'payload входа'}
+              aria-label={`${label}: назначение кнопки ${index + 1}`}
             />
           )}
         </div>
       ))}
-      <button className="btn btn--ghost" onClick={add}>+ кнопка</button>
+      <button className="btn btn--ghost" type="button" onClick={add}>+ Добавить кнопку</button>
     </div>
   )
 }
@@ -98,7 +99,7 @@ export default function ConfigPanel({ node, nodes, onParamsChange, onConfigChang
             onChange={(value) => onConfigChange(node.id, { [field.key]: value })}
           />
         ))}
-        <button className="btn btn--danger" onClick={() => onDelete(node.id)}>Удалить триггер</button>
+        <button className="btn btn--danger" type="button" onClick={() => onDelete(node.id)}>Удалить триггер</button>
       </aside>
     )
   }
@@ -117,15 +118,16 @@ export default function ConfigPanel({ node, nodes, onParamsChange, onConfigChang
       )}
       {(def.fields || []).map((field) => (
         field.kind === 'buttons' ? (
-          <label className="field" key={field.key}>
+          <div className="field" key={field.key}>
             <span className="field__label">{field.label}</span>
             <ButtonsField
               value={node.data.params[field.key]}
               nodes={nodes}
               ownerId={node.id}
+              label={field.label}
               onChange={(value) => onParamsChange(node.id, { [field.key]: value })}
             />
-          </label>
+          </div>
         ) : (
           <Field
             key={field.key}
@@ -135,7 +137,7 @@ export default function ConfigPanel({ node, nodes, onParamsChange, onConfigChang
           />
         )
       ))}
-      <button className="btn btn--danger" onClick={() => onDelete(node.id)}>Удалить блок</button>
+      <button className="btn btn--danger" type="button" onClick={() => onDelete(node.id)}>Удалить блок</button>
     </aside>
   )
 }

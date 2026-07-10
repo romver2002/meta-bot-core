@@ -6,13 +6,13 @@ export const PLATFORMS = {
     id: 'telegram',
     label: 'Telegram',
     tint: '#229ED9',
-    caps: ['text', 'buttons', 'ask', 'condition', 'mini_app', 'save', 'http'],
+    caps: ['text', 'buttons', 'ask', 'condition', 'mini_app', 'save', 'http', 'notify'],
   },
   max: {
     id: 'max',
     label: 'MAX',
     tint: '#5B5BF5',
-    caps: ['text', 'buttons', 'ask', 'condition', 'mini_app', 'save', 'http'],
+    caps: ['text', 'buttons', 'ask', 'condition', 'mini_app', 'save', 'http', 'notify'],
   },
 }
 
@@ -28,6 +28,7 @@ export const TRIGGERS = [
     type: 'start',
     label: 'Команда /start',
     icon: '⚑',
+    category: 'Как пользователь входит',
     hint: 'Пользователь запустил бота',
     configFields: [],
   },
@@ -35,6 +36,7 @@ export const TRIGGERS = [
     type: 'text',
     label: 'Текст пользователя',
     icon: '✎',
+    category: 'Как пользователь входит',
     hint: 'Точное совпадение входящего сообщения',
     configFields: [
       { key: 'pattern', label: 'Текст / паттерн', kind: 'text', placeholder: 'меню' },
@@ -44,6 +46,7 @@ export const TRIGGERS = [
     type: 'callback',
     label: 'Нажатие кнопки',
     icon: '↳',
+    category: 'Как пользователь входит',
     hint: 'Callback payload от inline-кнопки',
     configFields: [
       { key: 'payload', label: 'Payload', kind: 'text', placeholder: 'n_menu' },
@@ -53,6 +56,7 @@ export const TRIGGERS = [
     type: 'mini_app_result',
     label: 'Результат mini app',
     icon: '▣',
+    category: 'Как пользователь входит',
     hint: 'Mini app вернул данные после проверки init data',
     configFields: [],
   },
@@ -67,11 +71,11 @@ export const BLOCKS = [
     icon: '●',
     color: '#2563EB',
     cap: 'text',
+    category: 'Что отвечает бот',
     hint: 'Текст с переменными сценария',
     outputs: ['next'],
     fields: [
       { key: 'text', label: 'Текст сообщения', kind: 'textarea', required: true, placeholder: 'Здравствуйте, {name}.' },
-      { key: 'attachment', label: 'Вложение URL', kind: 'text', placeholder: 'https://...' },
     ],
   },
   {
@@ -80,6 +84,7 @@ export const BLOCKS = [
     icon: '▦',
     color: '#4F46E5',
     cap: 'buttons',
+    category: 'Что отвечает бот',
     hint: 'Текст + кнопки Button. Переходы задаются target у каждой кнопки.',
     outputs: [],
     fields: [
@@ -93,17 +98,12 @@ export const BLOCKS = [
     icon: '?',
     color: '#D97706',
     cap: 'ask',
+    category: 'Логика и данные',
     hint: 'Задаёт вопрос, ждёт ответ пользователя и сохраняет его в переменную',
     outputs: ['next'],
     fields: [
       { key: 'prompt', label: 'Вопрос', kind: 'textarea', required: true, placeholder: 'Как к вам обращаться?' },
       { key: 'save_as', label: 'Переменная', kind: 'text', required: true, placeholder: 'req_name' },
-      { key: 'validation', label: 'Проверка ответа', kind: 'select', options: [
-        { v: '', l: 'без проверки' },
-        { v: 'number', l: 'число' },
-        { v: 'email', l: 'email' },
-        { v: 'phone', l: 'телефон' },
-      ] },
     ],
   },
   {
@@ -112,6 +112,7 @@ export const BLOCKS = [
     icon: '◇',
     color: '#9333EA',
     cap: 'condition',
+    category: 'Логика и данные',
     hint: 'Ветвление по переменным сценария',
     outputs: ['true', 'false'],
     fields: [
@@ -124,6 +125,7 @@ export const BLOCKS = [
     icon: '▤',
     color: '#0D9488',
     cap: 'mini_app',
+    category: 'Mini app',
     hint: 'Показывает кнопку запуска mini app, привязанного к боту через API конструктора',
     outputs: ['next'],
     fields: [
@@ -138,6 +140,7 @@ export const BLOCKS = [
     icon: '◆',
     color: '#475569',
     cap: 'save',
+    category: 'Логика и данные',
     hint: 'Записывает значение в переменные активной сессии',
     outputs: ['next'],
     fields: [
@@ -151,6 +154,7 @@ export const BLOCKS = [
     icon: '⌁',
     color: '#0891B2',
     cap: 'http',
+    category: 'Интеграции',
     hint: 'Внешний HTTP-вызов. Секреты указываются как {{secret:name}} и подставляются backend-портом.',
     outputs: ['next', 'error'],
     fields: [
@@ -166,6 +170,20 @@ export const BLOCKS = [
       { key: 'body', label: 'Тело JSON', kind: 'json', jsonType: 'any', defaultValue: '{\n  "q": "{user_question}"\n}' },
       { key: 'timeout', label: 'Timeout, сек', kind: 'number', defaultValue: 10, min: 1, max: 60 },
       { key: 'response_map', label: 'Ответ → переменные', kind: 'json', jsonType: 'object', defaultValue: '{\n  "answer": "choices.0.message.content"\n}' },
+    ],
+  },
+  {
+    type: 'notify',
+    label: 'Уведомить команду',
+    icon: '↗',
+    color: '#C2410C',
+    cap: 'notify',
+    category: 'Интеграции',
+    hint: 'Отправляет сообщение адресату по роли. Адрес роли настраивается отдельно и не попадает в сценарий.',
+    outputs: ['next'],
+    fields: [
+      { key: 'to', label: 'Роль адресата', kind: 'text', required: true, placeholder: 'sales' },
+      { key: 'text', label: 'Текст уведомления', kind: 'textarea', required: true, placeholder: 'Новая заявка от {name}: {request}' },
     ],
   },
 ]
