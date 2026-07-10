@@ -47,6 +47,15 @@ function isEditableTarget(target) {
   return target instanceof HTMLElement && Boolean(target.closest('input, textarea, select, [contenteditable="true"]'))
 }
 
+function plural(value, forms) {
+  const remainder = Math.abs(value) % 100
+  const lastDigit = remainder % 10
+  if (remainder > 10 && remainder < 20) return forms[2]
+  if (lastDigit > 1 && lastDigit < 5) return forms[1]
+  if (lastDigit === 1) return forms[0]
+  return forms[2]
+}
+
 function presentationEdge(connection, nodes) {
   const source = nodes.find((node) => node.id === connection.source)
   const buttonIndex = buttonIndexFromHandle(connection.sourceHandle)
@@ -170,7 +179,18 @@ function Editor() {
     () => selection.nodes.filter((node) => node.data?.group === 'block').length,
     [selection.nodes],
   )
+  const selectedNodeCount = selection.nodes.length
+  const selectedEdgeCount = selection.edges.length
   const selectedElementCount = selection.nodes.length + selection.edges.length
+  const selectionSummary = useMemo(() => [
+    selectedNodeCount > 0 && `${selectedNodeCount} ${plural(selectedNodeCount, ['узел', 'узла', 'узлов'])}`,
+    selectedEdgeCount > 0 && `${selectedEdgeCount} ${plural(selectedEdgeCount, ['связь', 'связи', 'связей'])}`,
+  ].filter(Boolean).join(' · '), [selectedEdgeCount, selectedNodeCount])
+
+  const clearClipboard = useCallback(() => {
+    clipboardRef.current = null
+    setClipboardInfo(null)
+  }, [])
 
   const clearSelection = useCallback(() => {
     setNodes((current) => current.map((node) => (node.selected ? { ...node, selected: false } : node)))
@@ -178,6 +198,11 @@ function Editor() {
     setSelection({ nodes: [], edges: [] })
     setSelectedId(null)
   }, [setEdges, setNodes])
+
+  const clearSelectionContext = useCallback(() => {
+    clearSelection()
+    clearClipboard()
+  }, [clearClipboard, clearSelection])
 
   const copySelection = useCallback(() => {
     const selectedIds = new Set(selection.nodes.map((node) => node.id))
@@ -249,12 +274,12 @@ function Editor() {
         event.preventDefault()
         pasteSelection()
       }
-      if (event.key === 'Escape') clearSelection()
+      if (event.key === 'Escape') clearSelectionContext()
     }
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [clearSelection, copySelection, pasteSelection, selectAllElements, selectedBlockCount])
+  }, [clearSelectionContext, copySelection, pasteSelection, selectAllElements, selectedBlockCount])
 
   const validation = useMemo(
     () => validateFlow(graphRef.current.nodes, graphRef.current.edges, platform),
@@ -343,7 +368,8 @@ function Editor() {
   const onSelectionChange = useCallback(({ nodes: nextNodes, edges: nextEdges }) => {
     setSelection({ nodes: nextNodes, edges: nextEdges })
     setSelectedId(nextNodes.length === 1 ? nextNodes[0].id : null)
-  }, [])
+    if (nextNodes.length + nextEdges.length === 0) clearClipboard()
+  }, [clearClipboard])
 
   const onReconnectStart = useCallback((_, edge) => {
     reconnectingEdgeRef.current = edge.id
@@ -646,7 +672,7 @@ function Editor() {
               if (isCompactViewport()) setPaletteOpen(false)
               setRightOpen(true)
             }}
-            onPaneClick={() => setSelectedId(null)}
+            onPaneClick={clearSelectionContext}
             fitView
             fitViewOptions={{ padding: 0.24 }}
             aria-label="Схема сценария бота"
@@ -658,9 +684,9 @@ function Editor() {
 
           {(selectedElementCount > 0 || clipboardInfo) && (
             <div className="selectionToolbar" role="toolbar" aria-label="Действия с выделенными элементами">
-              <div className="selectionToolbar__status" aria-live="polite" title="Тяните рамку по пустому холсту; Ctrl/⌘ + клик добавляет элемент к выделению">
+              <div className="selectionToolbar__status" aria-live="polite" title="Рамка выделяет и узлы, и связи. Ctrl/⌘ + клик добавляет элемент к выделению.">
                 {selectedElementCount > 0
-                  ? `Выбрано: ${selectedElementCount}`
+                  ? `Выбрано: ${selectionSummary}`
                   : `Буфер: ${clipboardInfo.blockCount} блок.`}
               </div>
               <button
@@ -690,9 +716,15 @@ function Editor() {
               >
                 Удалить
               </button>
-              {selectedElementCount > 0 && (
-                <button className="icon-btn" type="button" onClick={clearSelection} aria-label="Снять выделение" title="Снять выделение (Esc)">✕</button>
-              )}
+              <button
+                className="icon-btn"
+                type="button"
+                onClick={clearSelectionContext}
+                aria-label={selectedElementCount > 0 ? 'Снять выделение и очистить буфер' : 'Очистить буфер'}
+                title={selectedElementCount > 0 ? 'Снять выделение и очистить буфер (Esc)' : 'Очистить буфер (Esc)'}
+              >
+                ✕
+              </button>
             </div>
           )}
 
