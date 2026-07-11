@@ -23,7 +23,8 @@ from application.observability import current_request_id
 
 # Скраб токена бота в ЛЮБОЙ записи (защита в глубину): httpx и другие библиотеки
 # пишут полные URL, а у Telegram токен живёт в пути (/bot<token>/метод).
-_TOKEN_IN_PATH = re.compile(r"/bot[^/\s\"']+/")
+# Формат токена TG — «цифры:base64-подобное», иначе зацепим безобидные пути (/api/bots/).
+_TOKEN_IN_PATH = re.compile(r"/bot\d+:[A-Za-z0-9_-]+/?")
 
 # Служебные атрибуты LogRecord — всё остальное считаем полями ``extra``.
 _RESERVED = frozenset(

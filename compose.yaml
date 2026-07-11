@@ -52,6 +52,7 @@ services:
     volumes:
       - ./src:/app/src  # live-reload; .venv образа bind'ом не перекрывается
       - ./logs:/app/logs  # файлы логов видны на хосте (ADR-0013)
+      - ./.secrets:/app/.secrets  # dev-vault на хосте: переживает пересоздание контейнера
 
   postgres:
     image: postgres:16-alpine
