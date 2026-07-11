@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.1"
-updated: 2026-07-10
+version: "1.2"
+updated: 2026-07-11
 verified_commit: ""
 owner: ""
 ---
@@ -45,7 +45,7 @@ ADR [0003](../decisions/0003-flow-engine-blocks-and-sandbox.md). Почему б
 |---|---|---|---|
 | `send_message` | отправляет пользователю текст (с переменными сценария) | `text` (шаблон с подстановками), опц. вложение | `BotPlatformPort.send_message` → `SendMessageUseCase` |
 | `show_buttons` | отправляет сообщение с кнопками (`Button`) | `text`, список `Button` (подпись + действие) | `BotPlatformPort` (маппер кнопок в адаптере) |
-| `ask` | задаёт вопрос и ждёт ответ пользователя, сохраняя его в переменную | `prompt`, `save_as` (имя переменной), опц. валидация | движок + `SessionRepository` (перевод FSM в ожидание) |
+| `ask` | задаёт вопрос и ждёт ответ пользователя, сохраняя его в переменную; кнопки узла — варианты быстрого ответа (payload = значение), свободный текст равноправен | `prompt`, `save_as` (имя переменной), опц. `Button`-варианты (action=callback), опц. валидация | движок + `SessionRepository` (перевод FSM в ожидание) |
 | `condition` | ветвление по условию над переменными сценария | выражение/сравнение, ветви `true`/`false` | движок (без внешних вызовов) |
 | `open_mini_app` | показывает кнопку запуска mini app, привязанного к боту | ссылка на `MiniApp` (HTTPS, BR-003) | `BotPlatformPort.build_mini_app_button` (Telegram `WebAppInfo` / кнопка MAX) |
 | `save` | сохраняет данные в состояние/во внешнюю систему | ключ, значение/маппинг | `SessionRepository` (переменные) или порт хранилища |

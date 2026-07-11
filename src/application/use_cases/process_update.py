@@ -5,7 +5,8 @@ webhook-роуте), находит бота и его опубликованн�
 ``Session`` (FSM) и исполняет цепочку блоков до точки ожидания.
 
 Правила маршрутизации события:
-1. callback: сначала кнопки текущего узла (action=next), затем callback-триггеры;
+1. callback: сначала кнопки-варианты ответа блока ask (payload = значение),
+   затем кнопки текущего узла (action=next), затем callback-триггеры;
 2. text при ожидающей сессии (блок ask) — потребляется как ответ;
 3. mini_app_result при сессии на узле open_mini_app — результат mini app,
    продолжаем сценарий; иначе — matching mini_app_result-триггеров;
@@ -244,6 +245,9 @@ class ProcessUpdateUseCase:
 
     def _route(self, flow: Flow, session: Session, event: IncomingEvent) -> _Route | None:
         if event.event_type is TriggerType.CALLBACK:
+            option = self._ask_option_answer(flow, session, event.payload)
+            if option is not None:
+                return option
             target = self._button_target(flow, session, event.payload)
             if target is not None:
                 return _Route(target)
@@ -258,6 +262,24 @@ class ProcessUpdateUseCase:
 
         trigger = self._match_trigger(flow, event)
         return _Route(trigger.target_node_id) if trigger is not None else None
+
+    def _ask_option_answer(self, flow: Flow, session: Session, payload: str | None) -> _Route | None:
+        """Кнопка-вариант блока ask: payload = готовое значение ответа.
+
+        Быстрый ответ равноправен набранному тексту (свою «сумму» по-прежнему
+        можно вбить). Чужой payload (например, «В меню» со старой карточки)
+        вариантом не считается и уходит ниже — к кнопкам узла и триггерам.
+        """
+        if payload is None or session.awaiting_variable is None or session.current_node_id is None:
+            return None
+        node = flow.nodes.get(session.current_node_id)
+        if node is None or node.type is not NodeType.ASK:
+            return None
+        for button in node.buttons:
+            if button.action is ButtonAction.CALLBACK and button.target == payload:
+                session.submit_answer(payload)
+                return _Route(self._transition_target(flow, node.id, "next"))
+        return None
 
     @staticmethod
     def _button_target(flow: Flow, session: Session, payload: str | None) -> str | None:
@@ -320,9 +342,11 @@ class ProcessUpdateUseCase:
                 )
                 return False  # ждём нажатие кнопки (callback)
             elif node.type is NodeType.ASK:
-                await send(render_text(str(node.params.get("prompt", "")), session.variables), ())
+                # Кнопки узла — варианты быстрого ответа (каталог блоков);
+                # свободный текст остаётся равноправным способом ответить.
+                await send(render_text(str(node.params.get("prompt", "")), session.variables), node.buttons)
                 session.await_answer(str(node.params.get("save_as", "")))
-                return False  # ждём ответ пользователя
+                return False  # ждём ответ пользователя (кнопка-вариант или текст)
             elif node.type is NodeType.OPEN_MINI_APP:
                 if mini_app_url is None:
                     raise FlowExecutionError(f"Боту не привязан mini app для блока {node.id!r}")

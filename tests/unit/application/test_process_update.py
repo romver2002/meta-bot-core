@@ -357,6 +357,58 @@ async def test_cyclic_flow_hits_step_limit() -> None:
         await use_case.execute(_event(TriggerType.START))
 
 
+def _options_flow() -> Flow:
+    """/start -> ask бюджета с кнопками-вариантами -> финал с ответом."""
+    ask = Node(
+        id="ask-budget",
+        type=NodeType.ASK,
+        params={"prompt": "Бюджет?", "save_as": "budget"},
+        buttons=(
+            Button(label="до 10 тыс ₽", action=ButtonAction.CALLBACK, target="до 10 тыс ₽"),
+            Button(label="10–30 тыс ₽", action=ButtonAction.CALLBACK, target="10–30 тыс ₽"),
+        ),
+    )
+    done = Node(id="done", type=NodeType.SEND_MESSAGE, params={"text": "Бюджет: {budget}"})
+    return Flow(
+        id="flow-options",
+        name="Варианты ответа",
+        nodes={"ask-budget": ask, "done": done},
+        triggers=(
+            Trigger(id="t", type=TriggerType.START, target_node_id="ask-budget"),
+            Trigger(id="t-menu", type=TriggerType.CALLBACK, target_node_id="done", config={"payload": "menu"}),
+        ),
+        transitions=(Transition(source_node_id="ask-budget", target_node_id="done"),),
+    )
+
+
+async def test_ask_option_click_submits_value_and_continues() -> None:
+    use_case, port, _ = await _engine(_options_flow())
+    await use_case.execute(_event(TriggerType.START))
+    assert [b.label for b in port.sent[-1].buttons] == ["до 10 тыс ₽", "10–30 тыс ₽"]  # варианты показаны
+
+    await use_case.execute(_event(TriggerType.CALLBACK, payload="10–30 тыс ₽"))
+
+    assert port.sent[-1].text == "Бюджет: 10–30 тыс ₽"  # клик = ответ, цепочка продолжилась
+
+
+async def test_ask_still_accepts_free_text_despite_options() -> None:
+    use_case, port, _ = await _engine(_options_flow())
+    await use_case.execute(_event(TriggerType.START))
+
+    await use_case.execute(_event(TriggerType.TEXT, text="42 500 ₽"))  # своя сумма текстом
+
+    assert port.sent[-1].text == "Бюджет: 42 500 ₽"
+
+
+async def test_foreign_callback_during_ask_falls_through_to_triggers() -> None:
+    use_case, port, _ = await _engine(_options_flow())
+    await use_case.execute(_event(TriggerType.START))
+
+    await use_case.execute(_event(TriggerType.CALLBACK, payload="menu"))  # не вариант ответа
+
+    assert port.sent[-1].text == "Бюджет: "  # глобальный триггер сработал, ответ не подменён
+
+
 async def test_save_values_map_sets_and_wipes_many_variables() -> None:
     """Save с values-маппингом (каталог блоков): несколько переменных одним узлом."""
     flow = Flow(

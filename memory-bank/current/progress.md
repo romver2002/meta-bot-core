@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.16"
+version: "1.17"
 updated: 2026-07-11
 verified_commit: ""
 owner: ""
@@ -28,6 +28,7 @@ owner: ""
 - 2026-07-10 — **BR-008 / ADR-0011, ПДн по закону**: завершение/просрочка сессии стирает `variables` (домен); фоновая чистка (`PurgeExpiredSessionsUseCase` за `SessionRetentionPort`) просрочивает зависшие FSM и удаляет завершённые сессии старше `SESSION_RETENTION_DAYS` целиком; в примере first-bot — экраны согласия перед сбором ПДн.
 - 2026-07-09..11 — `frontend/constructor/` актуализирован под живой Flow Engine/API (Engine v1 palette включая `notify`, `trigger.config`, `http_request`, панель «Боты и публикация», стартовый шаблон, безопасный путь публикации со скрытыми bot_id/row_version): кнопочные переходы видны на холсте; адаптивные связи, групповое выделение/копирование/удаление не меняют Flow-данные, снятие выделения чистит буфер, счётчик узлы/связи раздельный; FastAPI-ошибки нормализуются, проблемы публикации подсвечивают узлы, Error Boundary, drawer на мобильных; ширина панелей регулируется на десктопе (только localStorage, в Flow/API не входит). Гейты: `npm test` 16 и production build зелёные.
 - 2026-07-11 — ADR-0012 edit-in-place (ответ на нажатие правит сообщение с меню на месте, фолбэк — отправка+удаление; `edit_message`/`delete_message` в `BotPlatformPort`, различия платформ только в адаптерах) и read-контракт черновика `GET /api/bots/{id}/flow` (204 — черновика нет; пустое `name` не сбрасывает имя; не-UUID id → 404, а не 500). Гейт: 200 unit, mypy strict 93 файла, 6/6 контрактов.
+- 2026-07-11 — `ask` с вариантами быстрого ответа (кнопки узла: payload = значение; свободный текст равноправен) — по фидбэку живого прогона; в примере first-bot услуга/срок/бюджет кнопками, вилки бюджета из прайс-листа зависят от услуги (condition-ветвление данными, 42 узла). Гейт: 206 unit.
 
 ## В работе
 
@@ -72,10 +73,8 @@ owner: ""
   (2) seed `capability_matrix` в БД — ждёт ратификации ADR-0005;
   (3) `session.flow_version_id/current_node_id` nullable вопреки design.md §1 (черновая сессия до первого шага).
 - 2026-07-08 — перед релизом MAX сверить живым запросом 6 пунктов «требует проверки»
-  из `specs/002-platform-deep-dive/report.md` §6 (`update_types`, 429, `callback_id`, `requestContact`, TTL initData).
-- 2026-07-10 — TG-адаптер уже скрабит токен и рвёт цепочку исключений; MAX-адаптер
-  чейнит httpx-ошибку (`from exc`) — request в `__cause__` держит Authorization-заголовок:
-  не логировать цепочку с интроспекцией request до аналогичного скраба.
+  из `specs/002-platform-deep-dive/report.md` §6 (`update_types`, 429, `callback_id`, `requestContact`, TTL initData); 2026-07-11 — сертификат Минцифры (Russian Trusted Root CA) для `platform-api2.max.ru` добавлен в certifi контейнера ВРУЧНУЮ (эфемерно, теряется при rebuild) — вынести в Dockerfile (vendored PEM + append при сборке), без него publish/verify_token до MAX падает по TLS.
+- 2026-07-10 — MAX-адаптер чейнит httpx-ошибку (`from exc`): request в `__cause__` держит Authorization — не логировать цепочку с интроспекцией request до скраба (TG уже скрабит).
 
 ---
 
