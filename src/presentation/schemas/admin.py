@@ -51,6 +51,15 @@ class SaveFlowResponse(BaseModel):
     row_version: int
 
 
+class FlowDraftResponse(BaseModel):
+    """Read-контракт черновика: definition + row_version для безопасного save."""
+
+    flow_id: str
+    name: str
+    definition: dict[str, Any] = Field(description="Канонический контракт domain/flow/codec.py")
+    row_version: int
+
+
 class PublishResponse(BaseModel):
     bot: BotResponse
 

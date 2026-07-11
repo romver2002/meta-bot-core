@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Response, status
 
 from application.errors import (
     BotCreationError,
@@ -21,6 +21,7 @@ from application.use_cases.attach_mini_app import AttachMiniAppUseCase
 from application.use_cases.authenticate_mini_app import AuthenticateMiniAppUseCase
 from application.use_cases.create_bot import CreateBotUseCase
 from application.use_cases.get_bot import GetBotUseCase
+from application.use_cases.get_flow_draft import GetFlowDraftUseCase
 from application.use_cases.publish_bot import PublishBotUseCase
 from application.use_cases.save_flow_draft import SaveFlowDraftUseCase
 from application.use_cases.set_connection_secret import SetConnectionSecretUseCase
@@ -38,6 +39,7 @@ from presentation.providers.admin import (
     get_authenticate_mini_app_uc,
     get_create_bot_uc,
     get_get_bot_uc,
+    get_get_flow_draft_uc,
     get_publish_bot_uc,
     get_save_flow_draft_uc,
     get_set_connection_secret_uc,
@@ -48,6 +50,7 @@ from presentation.schemas.admin import (
     AttachMiniAppRequest,
     BotResponse,
     CreateBotRequest,
+    FlowDraftResponse,
     MiniAppAuthRequest,
     MiniAppAuthResponse,
     MiniAppResultRequest,
@@ -87,6 +90,32 @@ async def get_bot(
     except BotNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return BotResponse.from_domain(bot)
+
+
+@admin.get(
+    "/bots/{bot_id}/flow",
+    summary="Прочитать черновик сценария (в редактор)",
+    response_model=FlowDraftResponse,
+)
+async def get_flow_draft(
+    bot_id: str,
+    use_case: Annotated[GetFlowDraftUseCase, Depends(get_get_flow_draft_uc)],
+) -> FlowDraftResponse | Response:
+    """Коды различимы машинно: 404 — бота нет; 204 — бот есть, черновика ещё нет
+    (редактор начинает с чистого листа, а не перезаписывает вслепую).
+    """
+    try:
+        draft = await use_case.execute(bot_id)
+    except BotNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except FlowNotFoundError:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return FlowDraftResponse(
+        flow_id=draft.flow_id,
+        name=draft.name,
+        definition=draft.definition,
+        row_version=draft.row_version,
+    )
 
 
 @admin.put("/bots/{bot_id}/flow", summary="Сохранить черновик сценария (из редактора)")

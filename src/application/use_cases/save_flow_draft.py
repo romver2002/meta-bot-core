@@ -48,7 +48,12 @@ class SaveFlowDraftUseCase:
             raise BotNotFoundError(f"Бот {bot_id!r} не найден")
 
         flow_id = bot.flow_id or uuid.uuid4().hex
-        flow = definition_to_flow(flow_id, name or bot.name, definition)
+        if not name:
+            # Пустое имя = «не менять»: сохранение по read-контракту (definition +
+            # row_version, ADR-0008) не должно молча сбрасывать имя сценария на bot.name.
+            existing = await self._flows.get_draft(flow_id) if bot.flow_id else None
+            name = existing.flow.name if existing is not None else bot.name
+        flow = definition_to_flow(flow_id, name, definition)
         row_version = await self._flows.save_draft(flow, expected_row_version=expected_row_version)
 
         if bot.flow_id is None:

@@ -11,6 +11,7 @@ from fastapi import FastAPI
 
 from application.use_cases.create_bot import CreateBotUseCase
 from application.use_cases.get_bot import GetBotUseCase
+from application.use_cases.get_flow_draft import GetFlowDraftUseCase
 from application.use_cases.process_update import ProcessUpdateUseCase
 from application.use_cases.publish_bot import PublishBotUseCase
 from application.use_cases.save_flow_draft import SaveFlowDraftUseCase
@@ -21,6 +22,7 @@ from presentation.api.webhook_routes import webhooks
 from presentation.providers.admin import (
     get_create_bot_uc,
     get_get_bot_uc,
+    get_get_flow_draft_uc,
     get_publish_bot_uc,
     get_save_flow_draft_uc,
 )
@@ -62,6 +64,7 @@ def _build_app() -> tuple[FastAPI, StubPlatform, StubIdempotency]:
             get_create_bot_uc: lambda: CreateBotUseCase(bots=bots, token_vault=vault),
             get_get_bot_uc: lambda: GetBotUseCase(bots=bots),
             get_save_flow_draft_uc: lambda: SaveFlowDraftUseCase(bots=bots, flows=flows),
+            get_get_flow_draft_uc: lambda: GetFlowDraftUseCase(bots=bots, flows=flows),
             get_publish_bot_uc: lambda: PublishBotUseCase(
                 bots=bots, flows=flows, token_vault=vault, platform_factory=factory
             ),
@@ -136,6 +139,68 @@ async def test_save_flow_conflict_returns_409() -> None:
         # Слепая перезапись без row_version — конфликт (анти-TOCTOU контракт).
         second = await client.put(f"/api/bots/{bot['id']}/flow", json={"definition": definition})
         assert second.status_code == 409
+
+
+async def test_flow_draft_read_write_roundtrip() -> None:
+    """Редактор открывает существующий сценарий и безопасно продолжает его."""
+    app, _, _ = _build_app()
+    async with _client(app) as client:
+        bot = (await client.post("/api/bots", json={"name": "Кофейня", "platform": "telegram", "token": "fake"})).json()
+        definition = flow_to_definition(make_flow("editor-flow"))
+        saved = (await client.put(f"/api/bots/{bot['id']}/flow", json={"definition": definition})).json()
+
+        loaded = await client.get(f"/api/bots/{bot['id']}/flow")
+
+        assert loaded.status_code == 200
+        draft = loaded.json()
+        assert draft["definition"] == definition  # раундтрип кодека без искажений
+        assert draft["row_version"] == saved["row_version"]
+        assert draft["flow_id"] == saved["flow_id"]
+        assert draft["name"] == "Кофейня"  # имя по боту, пока редактор не задал своё
+
+        # Прочитанный row_version принимается сохранением — цикл open -> edit -> save.
+        resaved = await client.put(
+            f"/api/bots/{bot['id']}/flow",
+            json={"definition": definition, "row_version": draft["row_version"]},
+        )
+        assert resaved.status_code == 200
+        assert resaved.json()["row_version"] == draft["row_version"] + 1
+
+
+async def test_flow_draft_before_first_save_is_204() -> None:
+    # Машиночитаемое различие: 204 — «бот есть, черновика ещё нет» (чистый лист),
+    # 404 — «бота нет». Редактор не парсит detail-строки.
+    app, _, _ = _build_app()
+    async with _client(app) as client:
+        bot = (await client.post("/api/bots", json={"name": "Пустой", "platform": "max", "token": "fake"})).json()
+        response = await client.get(f"/api/bots/{bot['id']}/flow")
+        assert response.status_code == 204
+        assert response.content == b""
+
+
+async def test_save_without_name_preserves_draft_name() -> None:
+    # Сохранение по read-контракту (только definition + row_version) не должно
+    # молча сбрасывать имя сценария на bot.name (находка ревью 2026-07-11).
+    app, _, _ = _build_app()
+    async with _client(app) as client:
+        bot = (await client.post("/api/bots", json={"name": "Кофейня", "platform": "telegram", "token": "fake"})).json()
+        definition = flow_to_definition(make_flow("editor-flow"))
+        await client.put(
+            f"/api/bots/{bot['id']}/flow",
+            json={"definition": definition, "name": "Приём заявок"},
+        )
+
+        await client.put(f"/api/bots/{bot['id']}/flow", json={"definition": definition, "row_version": 0})
+
+        draft = (await client.get(f"/api/bots/{bot['id']}/flow")).json()
+        assert draft["name"] == "Приём заявок"  # имя пережило сохранение без name
+
+
+async def test_flow_draft_of_unknown_bot_is_404() -> None:
+    app, _, _ = _build_app()
+    async with _client(app) as client:
+        response = await client.get("/api/bots/ghost/flow")
+        assert response.status_code == 404
 
 
 async def test_publish_bot_without_flow_is_404() -> None:

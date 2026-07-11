@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.15"
-updated: 2026-07-10
+version: "1.16"
+updated: 2026-07-11
 verified_commit: ""
 owner: ""
 ---
@@ -18,27 +18,27 @@ owner: ""
 <!-- Что стабильно и на что можно опираться. Крупными блоками, не по коммитам. -->
 
 - 2026-07-06 — строгий контур CA: [.importlinter](../../.importlinter) (6 контрактов) + CI
-  [arch-lint](../../.github/workflows/arch-lint.yml)/[ci.yml](../../.github/workflows/ci.yml) (ruff/mypy/pytest, coverage ≥90%).
-- 2026-07-06 — реестр ADR: 0001–0002 accepted, 0003–0009 proposed.
+  [arch-lint](../../.github/workflows/arch-lint.yml)/[ci.yml](../../.github/workflows/ci.yml) (ruff/mypy/pytest, coverage ≥90%);
+  реестр ADR — [decisions/README](../decisions/README.md) (0001–0002 accepted, 0003–0012 proposed).
 - 2026-07-08 — бэкенд по канону CA (Python 3.14 + uv, PG16+Redis7): domain (Bot/Flow/Session, BR-001/003/006), хранение ADR-0008, Flow Engine, адаптеры Telegram/MAX, webhook с идемпотентностью, Admin API. Гейт зелёный: ruff · mypy strict · lint-imports 6 контрактов · 81 unit + 4 integration · e2e золотого пути + живой смоук.
-- 2026-07-09 — `frontend/constructor/` актуализирован под живой Flow Engine/API (Engine v1 palette, `trigger.config`, `http_request`, панель «Боты и публикация», стартовый шаблон помощника) + UX-исправления (закрываемые панели, вкладки, drawer на узких экранах).
-- 2026-07-08 — mini app end-to-end: auth init data (BR-007), блок `open_mini_app`, триггер `mini_app_result`, привязка mini app к боту.
-- 2026-07-09 — блок `http_request` (звонок в любой HTTP-API, `{{secret:*}}` за портом) + секреты подключения за портом; AI-ответ через OpenRouter выражается ДАННЫМИ Flow, без бото-специфики в ядре.
+- 2026-07-08/09 — mini app end-to-end (auth init data BR-007, `open_mini_app`, `mini_app_result`, привязка к боту) и блок `http_request` (`{{secret:*}}` за портом; AI-ответ через OpenRouter выражается ДАННЫМИ Flow, без бото-специфики в ядре).
 - 2026-07-09 — первый бот «умный помощник по заявкам» как Flow-данные ([examples/first-bot-request-assistant/](../../examples/first-bot-request-assistant/)): каркас + живой AI-ответ (OpenRouter) + форма; live-smoke в Telegram пройден (навигация/меню вживую). Движковый must-fix остаточной `http_request`-переменной (null-content → прошлый ответ) починен + регресс-тест.
 - 2026-07-10 — блок `notify` (ADR-0010 proposed): доставка третьему лицу по символической роли за портом `NotificationTargetResolverPort`, best-effort; `PUT /notifications/{role}`; пример first-bot реально доставляет заявку админу/разработчику + catch-all подсказка. Рой-ревью (55 агентов): 2 must-fix починены (resolve вне try; мёртвые кнопки после catch-all-детура → guard-триггеры в данных), антиспуфинг карточки, атомарный общий JSON-store.
 - 2026-07-10 — `BotPlatformPort.answer_callback` + `IncomingEvent.callback_id`: движок best-effort подтверждает каждое нажатие до guard'ов (гасит спиннер даже у бота на паузе); TG `answerCallbackQuery` (id в теле, скраб токена в ошибках) / MAX `POST /answers` (id в query) — различия только в адаптерах; MockTransport-контракты в тестах.
 - 2026-07-10 — **BR-008 / ADR-0011, ПДн по закону**: завершение/просрочка сессии стирает `variables` (домен); фоновая чистка (`PurgeExpiredSessionsUseCase` за `SessionRetentionPort`) просрочивает зависшие FSM и удаляет завершённые сессии старше `SESSION_RETENTION_DAYS` целиком; в примере first-bot — экраны согласия перед сбором ПДн.
-- 2026-07-10 — `frontend/constructor/`: кнопочные переходы видны на холсте (синхронизированы с `Button.target`),
-  безопасный путь публикации (скрытые bot_id/row_version, лок платформы, проверка Mini App), палитра = Engine v1 включая `notify`; адаптивные связи и групповое выделение/копирование/удаление не меняют Flow-данные, а снятие выделения очищает внутренний буфер и счётчик показывает узлы/связи раздельно. FastAPI-ошибки нормализуются, все проблемы публикации подсвечивают узлы, запросы взаимно блокируются и есть Error Boundary; `npm test` (11) и build зелёные.
+- 2026-07-09..11 — `frontend/constructor/` актуализирован под живой Flow Engine/API (Engine v1 palette включая `notify`, `trigger.config`, `http_request`, панель «Боты и публикация», стартовый шаблон, безопасный путь публикации со скрытыми bot_id/row_version): кнопочные переходы видны на холсте; адаптивные связи, групповое выделение/копирование/удаление не меняют Flow-данные, снятие выделения чистит буфер, счётчик узлы/связи раздельный; FastAPI-ошибки нормализуются, проблемы публикации подсвечивают узлы, Error Boundary, drawer на мобильных; ширина панелей регулируется на десктопе (только localStorage, в Flow/API не входит). Гейты: `npm test` 16 и production build зелёные.
+- 2026-07-11 — ADR-0012 edit-in-place (ответ на нажатие правит сообщение с меню на месте, фолбэк — отправка+удаление; `edit_message`/`delete_message` в `BotPlatformPort`, различия платформ только в адаптерах) и read-контракт черновика `GET /api/bots/{id}/flow` (204 — черновика нет; пустое `name` не сбрасывает имя; не-UUID id → 404, а не 500). Гейт: 200 unit, mypy strict 93 файла, 6/6 контрактов.
 
 ## В работе
 
 <!-- Начато, но не завершено; в каком состоянии оставлено и что дальше. -->
 
-- 2026-07-08 — ратификация ADR [0003](../decisions/0003-flow-engine-blocks-and-sandbox.md)–[0011](../decisions/0011-session-pii-retention.md)
-  (proposed, ждут команды). Следом — редактор ↔ Admin API, песочница custom_code.
-- 2026-07-10 — read-контракт черновика и восстановление layout в редакторе:
-  без него нельзя безопасно открыть и продолжить редактирование существующего Flow.
+- 2026-07-08 — ратификация ADR [0003](../decisions/0003-flow-engine-blocks-and-sandbox.md)–[0012](../decisions/0012-message-edit-in-place.md) (proposed, ждут команды). Следом — редактор ↔ Admin API, песочница custom_code.
+- 2026-07-10 — открытие существующего Flow в редакторе: бэкенд-половина готова
+  (2026-07-11: `GET /api/bots/{id}/flow` → definition+row_version; 204 — черновика
+  ещё нет; пустое `name` при сохранении не сбрасывает имя сценария); осталась
+  фронт-половина — `getFlowDraft` в adminApi, загрузка сценария на холст и
+  восстановление layout.
 
 ## Известные проблемы
 

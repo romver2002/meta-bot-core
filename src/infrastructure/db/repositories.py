@@ -41,8 +41,14 @@ class PgBotRepository:
         self._session_factory = session_factory
 
     async def get(self, bot_id: str) -> Bot | None:
+        # bot_id приходит из URL (admin/webhook): не-UUID — «такого бота нет»
+        # (None -> 404 на границе), а не ValueError -> 500 из глубины стека.
+        try:
+            key = uuid.UUID(bot_id)
+        except ValueError:
+            return None
         async with self._session_factory() as db:
-            model = await db.get(BotModel, uuid.UUID(bot_id), options=[selectinload(BotModel.mini_app)])
+            model = await db.get(BotModel, key, options=[selectinload(BotModel.mini_app)])
             return mappers.model_to_bot(model) if model is not None else None
 
     async def save(self, bot: Bot) -> None:
