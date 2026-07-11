@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import logging
 import re
 import unicodedata
 import uuid
@@ -52,6 +53,7 @@ from domain.session.entities import Session
 
 MAX_STEPS = 64
 _SECRET_TOKEN = re.compile(r"\{\{secret:([A-Za-z0-9_.-]+)\}\}")
+logger = logging.getLogger("app.engine")
 
 _Send = Callable[[str, tuple[Button, ...]], Awaitable[None]]
 _SendTo = Callable[[str, str], Awaitable[None]]  # (external_chat_id, text) — блок notify
@@ -156,10 +158,12 @@ class ProcessUpdateUseCase:
             # Гасим индикатор ожидания сразу и для ЛЮБОГО нажатия — в том числе
             # у бота на паузе/черновике: пауза и есть главный источник протухших
             # кнопок. Best-effort: подтверждение не важнее исполнения сценария.
-            with contextlib.suppress(ApplicationError):
+            try:
                 await platform.answer_callback(
                     AnswerCallbackCommand(bot_token=token, callback_id=event.callback_id)
                 )
+            except ApplicationError:
+                logger.warning("Подтверждение нажатия не принято платформой", extra={"bot_id": bot.id})
 
         if bot.status is not BotStatus.PUBLISHED or bot.published_flow_version_id is None:
             return  # пауза/черновик: бот не отвечает (нажатие уже подтверждено выше)
@@ -406,9 +410,13 @@ class ProcessUpdateUseCase:
             return
         try:
             chat_id = await self._notifications.resolve(bot_id, role)
-            if chat_id is not None:
-                await send_to(chat_id, text)
+            if chat_id is None:
+                logger.warning("Роль уведомления не привязана — пропуск", extra={"bot_id": bot_id, "role": role})
+                return
+            await send_to(chat_id, text)
         except ApplicationError:
+            # chat_id адресата в лог не пишем (ПДн) — роли достаточно для разбора.
+            logger.warning("Уведомление роли не доставлено", extra={"bot_id": bot_id, "role": role})
             return
 
     # ── http_request ─────────────────────────────────────────────────────────

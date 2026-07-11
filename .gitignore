@@ -34,3 +34,5 @@ Templater/
 .coverage
 coverage.xml
 htmlcov/
+# файлы логов локальной разработки (ADR-0013)
+logs/

@@ -120,13 +120,40 @@ async def test_golden_path_from_create_to_bot_reply() -> None:
         assert published.json()["bot"]["status"] == "published"
 
         received = await client.post(f"/webhooks/telegram/{bot['id']}", json=_start_update())
-        assert received.json() == {"ok": True}
+        assert received.json() == {"ok": True, "outcome": "processed"}  # типизированный исход (enum)
         assert [c.text for c in platform.sent] == ["Привет, !", "Как вас зовут?"]
 
         # Повторная доставка того же update — дубликат, движок не дёргается.
         duplicate = await client.post(f"/webhooks/telegram/{bot['id']}", json=_start_update())
-        assert duplicate.json()["duplicate"] is True
+        assert duplicate.json()["outcome"] == "duplicate"
         assert len(platform.sent) == 2
+
+
+async def test_webhook_unknown_bot_is_200_not_processed(caplog) -> None:
+    # Платформам всегда 200 (иначе ретрай-шторм; MAX отписывает после 8 ч без 200):
+    # ApplicationError -> outcome=not_processed + ERROR со стеком в лог.
+    import logging
+
+    app, _, _ = _build_app()
+    async with _client(app) as client:
+        with caplog.at_level(logging.ERROR, logger="app.webhook"):
+            response = await client.post("/webhooks/telegram/ghost-bot", json=_start_update())
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "outcome": "not_processed"}
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert len(errors) == 1
+    assert errors[0].exc_info is not None  # стек в логе, не в ответе
+
+
+async def test_webhook_unsupported_update_is_200_ignored() -> None:
+    app, _, _ = _build_app()
+    async with _client(app) as client:
+        response = await client.post(
+            "/webhooks/telegram/any-bot", json={"update_id": 1, "edited_message": {"text": "x"}}
+        )
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "outcome": "ignored"}
 
 
 async def test_save_flow_conflict_returns_409() -> None:
@@ -201,6 +228,26 @@ async def test_flow_draft_of_unknown_bot_is_404() -> None:
     async with _client(app) as client:
         response = await client.get("/api/bots/ghost/flow")
         assert response.status_code == 404
+
+
+async def test_publish_when_platform_unreachable_is_502() -> None:
+    # Сеть/TLS до платформы упали при verify_token (живой случай: нет сертификата
+    # Минцифры для platform-api2.max.ru) — клиент получает 502, а не голый 500.
+    from application.errors import ApplicationError
+
+    app, platform, _ = _build_app()
+    async with _client(app) as client:
+        bot = (await client.post("/api/bots", json={"name": "Бот", "platform": "telegram", "token": "fake"})).json()
+        await client.put(
+            f"/api/bots/{bot['id']}/flow",
+            json={"definition": flow_to_definition(make_flow("editor-flow"))},
+        )
+        platform.verify_token_error = ApplicationError("MAX API недоступен для проверки токена")
+
+        response = await client.post(f"/api/bots/{bot['id']}/publish")
+
+        assert response.status_code == 502
+        assert "недоступен" in response.json()["detail"]
 
 
 async def test_publish_bot_without_flow_is_404() -> None:

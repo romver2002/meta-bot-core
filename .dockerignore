@@ -29,3 +29,5 @@ ruvector.db
 .env.*
 !.env.example
 .secrets/
+# файлы логов локальной разработки (ADR-0013)
+logs/

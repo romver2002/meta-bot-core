@@ -37,6 +37,9 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-metabot}:${POSTGRES_PASSWORD:-metabot}@postgres:5432/${POSTGRES_DB:-metabot}
       REDIS_URL: redis://redis:6379/0
+      # ADR-0013: локально пишем и файлы логов (смонтированы на хост ./logs —
+      # errors.log содержит только ERROR со стеками). В проде LOG_DIR не задаётся.
+      LOG_DIR: ${LOG_DIR:-logs}
     # Миграции применяются на старте: контур запуска всегда даёт актуальную схему.
     command: sh -c "uv run alembic upgrade head && uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
     depends_on:
@@ -48,6 +51,7 @@ services:
       - dev
     volumes:
       - ./src:/app/src  # live-reload; .venv образа bind'ом не перекрывается
+      - ./logs:/app/logs  # файлы логов видны на хосте (ADR-0013)
 
   postgres:
     image: postgres:16-alpine

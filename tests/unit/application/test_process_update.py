@@ -483,15 +483,19 @@ class _AckFailingPlatform(StubPlatform):
         raise ApplicationError("ack не принят")
 
 
-async def test_ack_failure_does_not_break_scenario() -> None:
+async def test_ack_failure_does_not_break_scenario(caplog) -> None:
+    import logging
+
     use_case, port, _ = await _engine(
         _flow(), platform_port=_AckFailingPlatform(full_capabilities())
     )
     await use_case.execute(_event(TriggerType.TEXT, text="меню"))  # show_buttons «Куда дальше?»
 
-    await use_case.execute(_event(TriggerType.CALLBACK, payload="finish", callback_id="cbq-1"))
+    with caplog.at_level(logging.WARNING, logger="app.engine"):
+        await use_case.execute(_event(TriggerType.CALLBACK, payload="finish", callback_id="cbq-1"))
 
     assert port.sent[-1].text == "Готово, ."  # цепочка исполнилась несмотря на сбой ack
+    assert any("Подтверждение нажатия" in r.getMessage() for r in caplog.records)  # сбой виден
 
 
 # ── edit-in-place ответа на нажатие (ADR-0012) ───────────────────────────────
@@ -660,27 +664,40 @@ async def test_notify_delivers_to_role_and_continues() -> None:
     assert user_message.text == "Принято, Иван."
 
 
-async def test_notify_unbound_role_is_skipped_and_chain_continues() -> None:
+async def test_notify_unbound_role_is_skipped_and_chain_continues(caplog) -> None:
+    import logging
+
     use_case, port, _ = await _engine(_notify_flow(), notifications=StubNotificationTargets())
 
-    await use_case.execute(_event(TriggerType.START))
+    with caplog.at_level(logging.WARNING, logger="app.engine"):
+        await use_case.execute(_event(TriggerType.START))
 
     assert [c.external_chat_id for c in port.sent] == [CHAT]  # только финал пользователю
     assert port.sent[0].text == "Принято, Иван."
+    assert any("не привязана" in r.getMessage() for r in caplog.records)  # молчания больше нет
 
 
-async def test_notify_delivery_failure_does_not_break_user_chain() -> None:
+async def test_notify_delivery_failure_does_not_break_user_chain(caplog) -> None:
+    import logging
+
+    from infrastructure.observability.logging_setup import JsonFormatter
+
     use_case, port, _ = await _engine(
         _notify_flow(),
         notifications=StubNotificationTargets({"admin": "admin-chat"}),
         platform_port=_FailingToChatPlatform("admin-chat"),
     )
 
-    await use_case.execute(_event(TriggerType.START))
+    with caplog.at_level(logging.WARNING, logger="app.engine"):
+        await use_case.execute(_event(TriggerType.START))
 
     # Уведомление упало (best-effort), но пользователь получил свой ответ.
     assert [c.external_chat_id for c in port.sent] == [CHAT]
     assert port.sent[0].text == "Принято, Иван."
+    warn = next(r for r in caplog.records if "не доставлено" in r.getMessage())
+    line = JsonFormatter().format(warn)
+    assert "admin-chat" not in line  # ПДн-инвариант: chat_id адресата в лог не пишется
+    assert warn.role == "admin"  # роли достаточно для разбора инцидента  # type: ignore[attr-defined]
 
 
 class _FailingResolver:

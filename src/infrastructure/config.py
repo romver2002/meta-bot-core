@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     session_purge_interval: int = 3600
     webhook_idempotency_ttl: int = 86400
     webhook_secret: str | None = None  # сверяется с X-*-Secret заголовком платформы
+    # Логирование (ADR-0013): уровень и опциональный каталог файлов app.log/errors.log
+    # (локальная разработка; в проде LOG_DIR не задаётся — только stdout).
+    log_level: str = "INFO"
+    log_dir: str | None = None
     # Пути к dev-хранилищам секретов (сами пути — не секрет; прод — открытый вопрос).
     token_vault_file: str = ".secrets/token-vault.json"  # noqa: S105 — путь к файлу, не пароль
     connection_secrets_file: str = ".secrets/connections.json"

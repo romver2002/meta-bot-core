@@ -8,7 +8,8 @@ Pipeline: приём -> проверка секрета -> нормализац�
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+import logging
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
@@ -22,8 +23,10 @@ from presentation.providers.webhooks import (
     get_platform_factory,
     get_process_update_uc,
 )
+from presentation.schemas.webhooks import WebhookAck, WebhookOutcome
 
 webhooks = APIRouter()
+logger = logging.getLogger("app.webhook")
 
 _SECRET_HEADERS = {
     Platform.TELEGRAM: "X-Telegram-Bot-Api-Secret-Token",
@@ -39,7 +42,7 @@ async def receive_update(
     factory: Annotated[PlatformFactory, Depends(get_platform_factory)],
     idempotency: Annotated[IdempotencyPort, Depends(get_idempotency)],
     use_case: Annotated[ProcessUpdateUseCase, Depends(get_process_update_uc)],
-) -> dict[str, Any]:
+) -> WebhookAck:
     try:
         platform_vo = Platform(platform)
     except ValueError as exc:
@@ -52,17 +55,31 @@ async def receive_update(
     payload = await request.json()
     event = factory.for_platform(platform_vo).parse_update(bot_id, payload)
     if event is None:
-        return {"ok": True, "ignored": True}
+        logger.debug("Update не поддерживается — игнор", extra={"platform": platform, "bot_id": bot_id})
+        return WebhookAck(outcome=WebhookOutcome.IGNORED)
 
     if event.update_id is not None:
         key = f"idemp:{platform_vo.value}:{bot_id}:{event.update_id}"
         if not await idempotency.first_time(key):
-            return {"ok": True, "duplicate": True}
+            # Дубликаты вебхуков — норма платформ (ретраи), но их долю наблюдаем.
+            logger.warning(
+                "Дубль update отброшен по идемпотентности",
+                extra={"platform": platform, "bot_id": bot_id, "update_id": event.update_id},
+            )
+            return WebhookAck(outcome=WebhookOutcome.DUPLICATE)
 
     try:
         await use_case.execute(event)
     except ApplicationError:
         # Событие принято, но не обработано (бот удалён и т.п.) — 200,
-        # чтобы платформа не долбила ретраями; детали — в логи (observability).
-        return {"ok": True, "processed": False}
-    return {"ok": True}
+        # чтобы платформа не долбила ретраями; детали — в лог со стеком.
+        logger.exception(
+            "Update принят, но не обработан",
+            extra={"platform": platform, "bot_id": bot_id, "event_type": event.event_type.value},
+        )
+        return WebhookAck(outcome=WebhookOutcome.NOT_PROCESSED)
+    logger.info(
+        "Update обработан",
+        extra={"platform": platform, "bot_id": bot_id, "event_type": event.event_type.value},
+    )
+    return WebhookAck(outcome=WebhookOutcome.PROCESSED)

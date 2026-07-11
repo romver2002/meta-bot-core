@@ -42,6 +42,7 @@ from infrastructure.integrations.health_checks import (
     SettingsHealthServiceRegistry,
 )
 from infrastructure.maintenance.session_purge import run_periodic_purge
+from infrastructure.observability.logging_setup import configure_logging
 from infrastructure.platforms.factory import RegistryPlatformFactory
 from infrastructure.platforms.max.adapter import MaxBotAdapter
 from infrastructure.platforms.telegram.adapter import TelegramBotAdapter
@@ -51,6 +52,7 @@ from infrastructure.security.file_token_vault import FileTokenVault
 from presentation.api.admin_routes import admin
 from presentation.api.health_routes import health
 from presentation.api.webhook_routes import webhooks
+from presentation.middleware.request_context import request_context_middleware
 from presentation.providers.admin import (
     get_attach_mini_app_uc,
     get_authenticate_mini_app_uc,
@@ -91,6 +93,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     settings = Settings()
+    configure_logging(settings.log_level, settings.log_dir)  # ADR-0013: до любых логгеров
     engine = build_engine(settings)
     session_factory = build_session_factory(engine)
     http_client = httpx.AsyncClient(timeout=10.0)
@@ -134,6 +137,7 @@ def create_app() -> FastAPI:
         retention_seconds=settings.session_retention_days * 86400,
     )
 
+    app.middleware("http")(request_context_middleware)  # request_id + доступ-лог + единый 500
     app.include_router(health, prefix="/healthchecks", tags=["Состояние"])
     app.include_router(admin, prefix="/api", tags=["Конструктор"])
     app.include_router(webhooks, prefix="/webhooks", tags=["Вебхуки"])
