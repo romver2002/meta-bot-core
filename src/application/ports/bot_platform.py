@@ -34,6 +34,32 @@ class SendMessageCommand:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class EditMessageCommand:
+    """Правка отправленного ботом сообщения на месте (ADR-0012).
+
+    Полностью заменяет текст и клавиатуру: пустые ``buttons`` означают
+    «убрать клавиатуру», а не «оставить как было» — протухшее меню не должно
+    оставаться кликабельным. ``external_chat_id`` нужен только Telegram
+    (адресация ``chat_id + message_id``); MAX правит по одному ``message_id``.
+    """
+
+    bot_token: str
+    external_chat_id: str
+    message_id: str
+    text: str
+    buttons: tuple[Button, ...] = ()
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class DeleteMessageCommand:
+    """Удаление отправленного ботом сообщения (ADR-0012)."""
+
+    bot_token: str
+    external_chat_id: str
+    message_id: str
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class AnswerCallbackCommand:
     """Подтверждение нажатия кнопки (гасит индикатор ожидания у пользователя).
 
@@ -69,6 +95,27 @@ class BotPlatformPort(Protocol):
 
         :raises ApplicationError: реализация оборачивает сетевые сбои
             в свои ошибки; доменных ошибок здесь не бывает.
+        """
+        ...
+
+    async def edit_message(self, command: EditMessageCommand) -> None:
+        """Правит отправленное ботом сообщение на месте (текст + клавиатура).
+
+        Идемпотентность: правка в идентичное содержимое — успех, не ошибка
+        (Telegram отвечает «message is not modified» — адаптер гасит).
+
+        :raises ApplicationError: платформа отказала (сообщение слишком старое,
+            удалено, недоступно) или сетевой сбой; вызывающий выбирает фолбэк
+            (обычно — отправить новое сообщение).
+        """
+        ...
+
+    async def delete_message(self, command: DeleteMessageCommand) -> None:
+        """Удаляет отправленное ботом сообщение.
+
+        :raises ApplicationError: платформа отказала (лимит давности, нет прав,
+            уже удалено) или сетевой сбой; вызывающий обязан пережить это
+            best-effort — удаление не важнее исполнения сценария.
         """
         ...
 

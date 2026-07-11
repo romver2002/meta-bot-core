@@ -1,7 +1,7 @@
 ---
 status: draft
-version: "1.4"
-updated: 2026-07-10
+version: "1.5"
+updated: 2026-07-11
 verified_commit: ""
 owner: ""
 ---
@@ -80,7 +80,8 @@ ADR только со статусом `proposed` и сообщает об эт�
 | [0009](0009-max-adapter-thin-client.md) | MaxBotAdapter — тонкий httpx-клиент вместо SDK maxapi | proposed | 2026-07-08 |
 | [0010](0010-notify-block-and-notification-targets.md) | Блок notify + адресаты уведомлений (роль → chat_id) | proposed | 2026-07-09 |
 | [0011](0011-session-pii-retention.md) | Ретеншен и стирание ПДн сессий (BR-008) | proposed | 2026-07-10 |
+| [0012](0012-message-edit-in-place.md) | Обновление отправленных сообщений (edit-in-place ответа на нажатие) | proposed | 2026-07-11 |
 
-ADR-0001 и 0002 приняты (основа проекта); 0003–0011 — черновики на ратификацию
+ADR-0001 и 0002 приняты (основа проекта); 0003–0012 — черновики на ратификацию
 командой: статус `accepted` им проставляет владелец раздела
 ([../_meta/governance.md](../_meta/governance.md)).

@@ -13,7 +13,13 @@ from typing import Any, NoReturn
 import httpx
 
 from application.errors import ApplicationError
-from application.ports.bot_platform import AnswerCallbackCommand, MiniAppIdentity, SendMessageCommand
+from application.ports.bot_platform import (
+    AnswerCallbackCommand,
+    DeleteMessageCommand,
+    EditMessageCommand,
+    MiniAppIdentity,
+    SendMessageCommand,
+)
 from domain.capabilities import CapabilityMatrix
 from domain.events import IncomingEvent
 from domain.flow.entities import Button
@@ -24,6 +30,25 @@ from infrastructure.platforms.telegram.mini_app_auth import validate_telegram_in
 from infrastructure.platforms.telegram.webhook import parse_telegram_update
 
 _TOKEN_IN_PATH = re.compile(r"/bot[^/\s']+/")
+
+
+def _message_id_as_int(message_id: str) -> int:
+    """Нейтральный str-идентификатор -> Integer Telegram (specs/002, «Тип message_id»)."""
+    try:
+        return int(message_id)
+    except ValueError as exc:
+        raise ApplicationError(f"Telegram message_id не числовой: {message_id!r}") from exc
+
+
+def _is_not_modified(response: httpx.Response | None) -> bool:
+    """400 «message is not modified» — правка в идентичное содержимое, не сбой."""
+    if response is None:
+        return False
+    try:
+        description = response.json().get("description", "")
+    except ValueError:
+        return False
+    return "message is not modified" in str(description)
 
 
 def _raise_scrubbed(message: str, exc: httpx.HTTPError) -> NoReturn:
@@ -100,6 +125,47 @@ class TelegramBotAdapter:
         except httpx.HTTPError as exc:
             # В тексте ошибки нет ни токена, ни содержимого сообщения.
             _raise_scrubbed(f"Telegram sendMessage не доставлен (chat={command.external_chat_id})", exc)
+
+    async def edit_message(self, command: EditMessageCommand) -> None:
+        """editMessageText: текст и inline-клавиатура заменяются целиком.
+
+        reply_markup без кнопок не передаётся — Telegram при этом УБИРАЕТ
+        клавиатуру (семантика EditMessageCommand: пусто = снять меню).
+        Правка в идентичное содержимое («message is not modified») — успех.
+        """
+        body: dict[str, Any] = {
+            "chat_id": command.external_chat_id,
+            "message_id": _message_id_as_int(command.message_id),
+            "text": command.text,
+        }
+        keyboard = _keyboard(command.buttons)
+        if keyboard is not None:
+            body["reply_markup"] = keyboard
+        try:
+            response = await self._client.post(
+                f"{self._base_url}/bot{command.bot_token}/editMessageText", json=body
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            if _is_not_modified(exc.response):
+                return
+            _raise_scrubbed(f"Telegram editMessageText отклонён (chat={command.external_chat_id})", exc)
+        except httpx.HTTPError as exc:
+            _raise_scrubbed(f"Telegram editMessageText не доставлен (chat={command.external_chat_id})", exc)
+
+    async def delete_message(self, command: DeleteMessageCommand) -> None:
+        """deleteMessage: у Telegram лимит давности 48 часов (platform-reference)."""
+        body = {
+            "chat_id": command.external_chat_id,
+            "message_id": _message_id_as_int(command.message_id),
+        }
+        try:
+            response = await self._client.post(
+                f"{self._base_url}/bot{command.bot_token}/deleteMessage", json=body
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            _raise_scrubbed(f"Telegram deleteMessage отклонён (chat={command.external_chat_id})", exc)
 
     async def answer_callback(self, command: AnswerCallbackCommand) -> None:
         """Зовёт answerCallbackQuery — без него у пользователя вечный спиннер."""

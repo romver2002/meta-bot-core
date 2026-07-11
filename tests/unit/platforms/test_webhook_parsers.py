@@ -25,6 +25,7 @@ def test_telegram_text_message() -> None:
     assert event.text == "привет"
     assert event.update_id == "7"
     assert event.callback_id is None  # текст — не нажатие: подтверждать нечего
+    assert event.message_id is None  # чужое сообщение бот не правит (домен events.py)
 
 
 def test_telegram_start_command() -> None:
@@ -44,7 +45,7 @@ def test_telegram_callback() -> None:
                 "id": "cbq-1",
                 "from": {"id": 42},
                 "data": "finish",
-                "message": {"chat": {"id": 4242}},
+                "message": {"message_id": 314, "chat": {"id": 4242}},
             },
         },
     )
@@ -53,6 +54,19 @@ def test_telegram_callback() -> None:
     assert event.payload == "finish"
     assert event.external_chat_id == "4242"
     assert event.callback_id == "cbq-1"  # для answerCallbackQuery (гасит спиннер)
+    assert event.message_id == "314"  # сообщение с кнопкой — цель edit-in-place (ADR-0012)
+
+
+def test_telegram_callback_without_origin_message() -> None:
+    # У слишком старых сообщений message в callback_query отсутствует —
+    # править нечего, но нажатие всё равно распознаётся и подтверждается.
+    event = parse_telegram_update(
+        BOT,
+        {"update_id": 11, "callback_query": {"id": "cbq-2", "from": {"id": 42}, "data": "x"}},
+    )
+    assert event is not None
+    assert event.message_id is None
+    assert event.external_chat_id == "42"  # фолбэк на приватный чат с пользователем
 
 
 def test_telegram_unsupported_update_ignored() -> None:
@@ -114,7 +128,7 @@ def test_max_callback_uses_callback_id() -> None:
             "update_type": "message_callback",
             "timestamp": 3000,
             "callback": {"callback_id": "cb-xyz", "payload": "finish", "user": {"user_id": 5}},
-            "message": {"recipient": {"chat_id": 55}},
+            "message": {"recipient": {"chat_id": 55}, "body": {"mid": "mid-menu"}},
         },
     )
     assert event is not None
@@ -122,6 +136,21 @@ def test_max_callback_uses_callback_id() -> None:
     assert event.payload == "finish"
     assert event.update_id == "cb-xyz"
     assert event.callback_id == "cb-xyz"  # для POST /answers (defensive-политика)
+    assert event.message_id == "mid-menu"  # сообщение с кнопкой — цель edit-in-place (ADR-0012)
+
+
+def test_max_callback_without_origin_mid() -> None:
+    event = parse_max_update(
+        BOT,
+        {
+            "update_type": "message_callback",
+            "timestamp": 3001,
+            "callback": {"callback_id": "cb-2", "payload": "x", "user": {"user_id": 5}},
+            "message": {"recipient": {"chat_id": 55}},
+        },
+    )
+    assert event is not None
+    assert event.message_id is None  # править нечего — движок шлёт новое сообщение
 
 
 def test_max_unsupported_update_ignored() -> None:

@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.27"
-updated: 2026-07-10
+version: "1.29"
+updated: 2026-07-11
 verified_commit: ""
 owner: ""
 ---
@@ -35,7 +35,6 @@ owner: ""
 - 2026-07-07 — интеграция MAX сразу на `platform-api2.max.ru` (старый хост не
   используем); токен MAX — в заголовке `Authorization`; сертификат Минцифры в доверенные
   ([../architecture/platform-reference.md](../architecture/platform-reference.md)).
-- 2026-07-08 — Каркас визуального редактора сценариев на React + React Flow (frontend/constructor): палитра 4 триггеров + 8 блоков, холст с переходами, панель настройки, гейт публикации BR-001, JSON-панель Flow. npm build ок (202 модуля), dev-сервер 200. ADR-0007 (proposed) + синхронизированы индексы.
 - 2026-07-08 — Вертикальный срез бэкенда: src/ по канону CA (domain: Bot/Flow/Session+BR-001/003/006; application: 6 портов + CreateBot/PublishBot; presentation: health; infrastructure: скелет). Стек поднят по образцу sro-agent-core (решение Романа): Python 3.14, uv+uv.lock, hatchling/hatch-vcs, pytest 9, ruff 0.14 ALL, Dockerfile+compose (PG16+Redis7). Всё зелёное: ruff, mypy strict, lint-imports 5/5, pytest 32. ADR-0008 (proposed) + specs/001-persistence/design.md
 - 2026-07-08 — Хранение по ADR-0008: модели/мапперы/Pg-репозитории (версии Flow, оптимистический лок, partial-unique активной Session), Alembic 0001. Гейт: ruff/mypy/lint-imports/pytest 32 unit + 4 integration (testcontainers, PG16) — зелёные.
 - 2026-07-08 — Адверсариальный аудит (50 агентов): 40 подтверждённых находок исправлено (TOCTOU публикации, идемпотентный publish, create-коллизия, завершение Session, non-root Docker, loopback-порты, CI с тестами и покрытием 96%); отложенное зафиксировано в progress. Гейт: 72 теста, mypy 52 файла, 6/6 контрактов
@@ -50,6 +49,8 @@ owner: ""
 - 2026-07-10 — `BotPlatformPort.answer_callback` + `IncomingEvent.callback_id`: движок best-effort подтверждает каждое нажатие до маршрутизации (гасит спиннер и у протухших кнопок); TG `answerCallbackQuery` (id в теле) / MAX `POST /answers` (id в query) — различия только в адаптерах; контракты закреплены MockTransport-тестами.
 - 2026-07-10 — **BR-008/ADR-0011 (ПДн по закону)**: стирание переменных при завершении/просрочке; фоновая чистка (`SessionRetentionPort`, наблюдаемый цикл в `infrastructure/maintenance`); согласие + save-узлы-стиратели в примере (отмена стирает ПДн, дубль заявки блокируется guard'ом); MAX-ключи идемпотентности хэшируются; критерий простоя — `last_event_at`. Рой: 38 агентов, 11 подтверждённых находок вложено (включая must-fix «Отменить не стирает ПДн»).
 - 2026-07-10 — Конструктор: адаптивные связи и рамка/Ctrl/⌘-выделение, групповое перемещение, безопасные Ctrl/⌘+C/V с очисткой внутреннего буфера, раздельным счётчиком узлов/связей и массовое удаление; FastAPI 422 нормализуется по полям, 404/409/5xx и offline дают безопасные сообщения, все проблемы публикации видны на схеме и подсвечивают узлы. Добавлены единая блокировка API-действий, Error Boundary и корректное поведение drawer-панелей на мобильных; `npm test` (11) и production build зелёные.
+- 2026-07-11 — Конструктор: на десктопе пользователь регулирует палитру, инспектор и JSON-панель Flow; размеры хранятся локально, поддержаны клавиатура и сброс, mobile drawer не менялся. Гейты: npm test 16, build, lint-imports 6/6, pytest 190 passed (5 skipped).
+- 2026-07-11 — ADR-0012 edit-in-place: порт edit/delete_message + адаптеры TG/MAX + движок (ответ на callback правит меню на месте, фолбэк — отправка+удаление); 190 unit зелёные, mypy strict 92 файла, 6/6 арх-контрактов; рой-проверка доков опровергла 4 утверждения чата, лимиты зафиксированы в platform-reference
 
 ## Следующие шаги
 
@@ -66,8 +67,6 @@ owner: ""
 - 2026-07-10 — Не начинать отдельную Mini App-витрину/корзину: ближайший кейс —
   `first-bot-request-assistant`, где Flow собирает заявку до подтверждения и
   доставляет её админу; каталог, корзина и платежи остаются отложенными.
-- 2026-07-08 — Реализовать infrastructure/db по ADR-0008 (models/mappers/repositories, Alembic, интеграционные тесты testcontainers) и admin_routes + webhook_routes; фронт-редактор подключить к Admin API
-- 2026-07-08 — MaxBotAdapter: оценить SDK maxapi (github.com/love-apples/maxapi — MIT, живая v1.2.1, aiogram-стиль на aiohttp) против тонкого httpx-клиента; проверить, что SDK ходит на platform-api2.max.ru (токен в Authorization); Dispatcher/Router не нужны — роутит Flow Engine; решение оформить как ADR-0009 по правилу зависимостей tech-stack.md
 - 2026-07-08 — Рендеринг исходящих сообщений (Message Dispatcher/адаптеры): использовать Templater/ (локальный референс, BigPixelLab) как источник дизайна декларативного описания сообщения (текст+клавиатуры+if/for+вложенные шаблоны); код НЕ вендорить — нет лицензии, eval() на данных, привязка к aiogram; писать нейтральную модель + рендер в адаптерах
 - 2026-07-10 — для безопасного продолжения работы с уже существующим ботом нужен
   read-контракт черновика (`definition` + `row_version`) в Admin API и восстановление

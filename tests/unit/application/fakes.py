@@ -4,8 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 
-from application.errors import ConcurrencyError
-from application.ports.bot_platform import AnswerCallbackCommand, MiniAppIdentity, SendMessageCommand
+from application.errors import ApplicationError, ConcurrencyError
+from application.ports.bot_platform import (
+    AnswerCallbackCommand,
+    DeleteMessageCommand,
+    EditMessageCommand,
+    MiniAppIdentity,
+    SendMessageCommand,
+)
 from application.ports.flow_repository import FlowDraft
 from application.ports.http_client import HttpResponse
 from domain.bot.entities import Bot
@@ -133,6 +139,10 @@ class StubPlatform:
         self.verified_tokens: list[str] = []
         self.sent: list[SendMessageCommand] = []
         self.answered: list[AnswerCallbackCommand] = []
+        self.edited: list[EditMessageCommand] = []
+        self.deleted: list[DeleteMessageCommand] = []
+        self.edit_fails = False  # инъекция отказа платформы (лимит давности и т.п.)
+        self.delete_fails = False
 
     def capabilities(self) -> CapabilityMatrix:
         return self._capabilities
@@ -149,6 +159,16 @@ class StubPlatform:
 
     async def send_message(self, command: SendMessageCommand) -> None:
         self.sent.append(command)
+
+    async def edit_message(self, command: EditMessageCommand) -> None:
+        if self.edit_fails:
+            raise ApplicationError("платформа отказала в правке")
+        self.edited.append(command)
+
+    async def delete_message(self, command: DeleteMessageCommand) -> None:
+        if self.delete_fails:
+            raise ApplicationError("платформа отказала в удалении")
+        self.deleted.append(command)
 
     async def answer_callback(self, command: AnswerCallbackCommand) -> None:
         self.answered.append(command)

@@ -13,7 +13,13 @@ from typing import Any
 import httpx
 
 from application.errors import ApplicationError
-from application.ports.bot_platform import AnswerCallbackCommand, MiniAppIdentity, SendMessageCommand
+from application.ports.bot_platform import (
+    AnswerCallbackCommand,
+    DeleteMessageCommand,
+    EditMessageCommand,
+    MiniAppIdentity,
+    SendMessageCommand,
+)
 from domain.capabilities import CapabilityMatrix
 from domain.events import IncomingEvent
 from domain.flow.entities import Button
@@ -89,6 +95,75 @@ class MaxBotAdapter:
         except httpx.HTTPError as exc:
             # В тексте ошибки нет ни токена, ни содержимого сообщения.
             raise ApplicationError(f"MAX message не доставлен (chat={command.external_chat_id})") from exc
+
+    async def edit_message(self, command: EditMessageCommand) -> None:
+        """PUT /messages?message_id= — текст и клавиатура заменяются целиком.
+
+        Семантика attachments у MAX: null «не менять», [] «удалить все»
+        (specs/002, «Вложения при edit»). Пустые кнопки команды -> [] —
+        протухшая клавиатура снимается, а не остаётся.
+        """
+        attachment = _keyboard_attachment(command.buttons)
+        body: dict[str, Any] = {
+            "text": command.text,
+            "attachments": [attachment] if attachment is not None else [],
+        }
+        await self._simple_query(
+            "PUT",
+            "/messages",
+            command.bot_token,
+            params={"message_id": command.message_id},
+            json_body=body,
+            failure="MAX PUT /messages отклонён",
+        )
+
+    async def delete_message(self, command: DeleteMessageCommand) -> None:
+        """DELETE /messages?message_id= (chat_id платформе не нужен)."""
+        await self._simple_query(
+            "DELETE",
+            "/messages",
+            command.bot_token,
+            params={"message_id": command.message_id},
+            json_body=None,
+            failure="MAX DELETE /messages отклонён",
+        )
+
+    async def _simple_query(
+        self,
+        method: str,
+        path: str,
+        token: str,
+        *,
+        params: dict[str, str],
+        json_body: dict[str, Any] | None,
+        failure: str,
+    ) -> None:
+        """Вызов с ответом SimpleQueryResult: {success, message?}.
+
+        В отличие от POST /messages, поле ``message`` здесь — СТРОКА ошибки,
+        а не объект Message (specs/002, «Форма ответа») — парсим отдельно.
+        """
+        try:
+            response = await self._client.request(
+                method,
+                f"{self._base_url}{path}",
+                params=params,
+                json=json_body,
+                headers={"Authorization": token},
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise ApplicationError(failure) from exc
+        payload = self._payload_or_none(response)
+        if isinstance(payload, dict) and payload.get("success") is False:
+            raise ApplicationError(f"{failure}: {payload.get('message') or 'success=false'}")
+
+    @staticmethod
+    def _payload_or_none(response: httpx.Response) -> object:
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
     async def answer_callback(self, command: AnswerCallbackCommand) -> None:
         """POST /answers?callback_id= — defensive-политика «всегда отвечать» (specs/002)."""

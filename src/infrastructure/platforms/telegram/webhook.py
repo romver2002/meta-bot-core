@@ -35,6 +35,9 @@ def parse_telegram_update(bot_id: str, payload: Mapping[str, object]) -> Incomin
         origin = cast("dict[str, Any]", callback.get("message") or {})
         chat = cast("dict[str, Any]", origin.get("chat") or {})
         callback_id = callback.get("id")
+        # message в callback_query отсутствует у слишком старых сообщений —
+        # тогда движку нечего править на месте (message_id=None, ADR-0012).
+        origin_message_id = origin.get("message_id")
         return IncomingEvent(
             platform=Platform.TELEGRAM,
             bot_id=bot_id,
@@ -44,6 +47,7 @@ def parse_telegram_update(bot_id: str, payload: Mapping[str, object]) -> Incomin
             payload=str(callback.get("data", "")),
             update_id=update_id,
             callback_id=str(callback_id) if callback_id is not None else None,
+            message_id=str(origin_message_id) if origin_message_id is not None else None,
         )
 
     return None  # прочие типы update конструктором пока не поддерживаются

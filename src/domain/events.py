@@ -31,6 +31,10 @@ class IncomingEvent:
     payload: str | None = None
     update_id: str | None = None  # идентификатор update платформы — ключ идемпотентности
     callback_id: str | None = None  # транзиентный id нажатия кнопки — для подтверждения (ack)
+    # id сообщения-источника события. Заполняется ТОЛЬКО для callback (сообщение
+    # бота, на котором нажата кнопка) — движок обновляет его на месте (ADR-0012).
+    # Для text/start не заполняется: чужие сообщения бот не правит и не удаляет.
+    message_id: str | None = None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

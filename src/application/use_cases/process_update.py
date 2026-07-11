@@ -27,7 +27,13 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from application.errors import ApplicationError, BotNotFoundError, FlowExecutionError, FlowNotFoundError
-from application.ports.bot_platform import AnswerCallbackCommand, PlatformFactory, SendMessageCommand
+from application.ports.bot_platform import (
+    AnswerCallbackCommand,
+    DeleteMessageCommand,
+    EditMessageCommand,
+    PlatformFactory,
+    SendMessageCommand,
+)
 from application.ports.bot_repository import BotRepository
 from application.ports.connection_secrets import SecretResolverPort
 from application.ports.flow_repository import FlowRepository
@@ -172,7 +178,30 @@ class ProcessUpdateUseCase:
                 flow_version_id=version.id,
             )
 
+        # Edit-in-place (ADR-0012): первый ответ на нажатие кнопки правит само
+        # сообщение с кнопкой — протухшие меню не копятся в чате. message_id
+        # приходит только у callback-событий (домен events.py), чужие сообщения
+        # здесь не появляются по построению.
+        edit_target = event.message_id if event.event_type is TriggerType.CALLBACK else None
+
         async def send(text: str, buttons: tuple[Button, ...] = ()) -> None:
+            nonlocal edit_target
+            origin, edit_target = edit_target, None
+            if origin is not None:
+                try:
+                    await platform.edit_message(
+                        EditMessageCommand(
+                            bot_token=token,
+                            external_chat_id=event.external_chat_id,
+                            message_id=origin,
+                            text=text,
+                            buttons=buttons,
+                        )
+                    )
+                except ApplicationError:
+                    pass  # платформа отказала (давность/удалено) — шлём новое сообщение
+                else:
+                    return
             await platform.send_message(
                 SendMessageCommand(
                     bot_token=token,
@@ -181,6 +210,17 @@ class ProcessUpdateUseCase:
                     buttons=buttons,
                 )
             )
+            if origin is not None:
+                # Правка не удалась — хотя бы снимаем мёртвое меню, best-effort:
+                # новое сообщение уже доставлено, недоудалённое старое не критично.
+                with contextlib.suppress(ApplicationError):
+                    await platform.delete_message(
+                        DeleteMessageCommand(
+                            bot_token=token,
+                            external_chat_id=event.external_chat_id,
+                            message_id=origin,
+                        )
+                    )
 
         async def send_to(chat_id: str, text: str) -> None:
             await platform.send_message(

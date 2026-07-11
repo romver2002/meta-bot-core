@@ -86,6 +86,7 @@ def _event(
     text: str | None = None,
     payload: str | None = None,
     callback_id: str | None = None,
+    message_id: str | None = None,
 ) -> IncomingEvent:
     return IncomingEvent(
         platform=Platform.TELEGRAM,
@@ -96,6 +97,7 @@ def _event(
         text=text,
         payload=payload,
         callback_id=callback_id,
+        message_id=message_id,
     )
 
 
@@ -438,6 +440,123 @@ async def test_ack_failure_does_not_break_scenario() -> None:
     await use_case.execute(_event(TriggerType.CALLBACK, payload="finish", callback_id="cbq-1"))
 
     assert port.sent[-1].text == "Готово, ."  # цепочка исполнилась несмотря на сбой ack
+
+
+# ── edit-in-place ответа на нажатие (ADR-0012) ───────────────────────────────
+
+
+async def test_callback_edits_origin_message_in_place() -> None:
+    use_case, port, _ = await _engine(_flow())
+    await use_case.execute(_event(TriggerType.TEXT, text="меню"))  # show_buttons «Куда дальше?»
+    sent_before = len(port.sent)
+
+    await use_case.execute(_event(TriggerType.CALLBACK, payload="finish", message_id="m-menu"))
+
+    # Ответ заменил само сообщение с меню: новых отправок нет, мёртвое меню не копится.
+    assert [c.message_id for c in port.edited] == ["m-menu"]
+    assert port.edited[0].text == "Готово, ."  # finish(save) -> bye
+    assert port.edited[0].buttons == ()
+    assert len(port.sent) == sent_before
+    assert port.deleted == []
+
+
+async def test_only_first_response_edits_the_rest_are_sent() -> None:
+    two_replies = Flow(
+        id="flow-two",
+        name="Два ответа",
+        nodes={
+            "menu": Node(
+                id="menu",
+                type=NodeType.SHOW_BUTTONS,
+                params={"text": "?"},
+                buttons=(Button(label="Го", action=ButtonAction.NEXT, target="one"),),
+            ),
+            "one": Node(id="one", type=NodeType.SEND_MESSAGE, params={"text": "Один"}),
+            "two": Node(id="two", type=NodeType.SEND_MESSAGE, params={"text": "Два"}),
+        },
+        triggers=(Trigger(id="t", type=TriggerType.TEXT, target_node_id="menu", config={"pattern": "меню"}),),
+        transitions=(Transition(source_node_id="one", target_node_id="two"),),
+    )
+    use_case, port, _ = await _engine(two_replies)
+    await use_case.execute(_event(TriggerType.TEXT, text="меню"))
+
+    await use_case.execute(_event(TriggerType.CALLBACK, payload="one", message_id="m-menu"))
+
+    assert [c.text for c in port.edited] == ["Один"]  # меню заменено первым ответом
+    assert port.sent[-1].text == "Два"  # остальная цепочка — обычные отправки
+
+
+async def test_edit_failure_falls_back_to_send_and_removes_stale_menu() -> None:
+    use_case, port, _ = await _engine(_flow())
+    await use_case.execute(_event(TriggerType.TEXT, text="меню"))
+    port.edit_fails = True  # платформа отказала (лимит давности и т.п.)
+
+    await use_case.execute(_event(TriggerType.CALLBACK, payload="finish", message_id="m-old"))
+
+    assert port.sent[-1].text == "Готово, ."  # ответ доставлен новым сообщением
+    assert [c.message_id for c in port.deleted] == ["m-old"]  # мёртвое меню снято
+
+
+async def test_edit_and_delete_failure_still_delivers_reply() -> None:
+    use_case, port, _ = await _engine(_flow())
+    await use_case.execute(_event(TriggerType.TEXT, text="меню"))
+    port.edit_fails = True
+    port.delete_fails = True  # совсем старое сообщение: и правка, и удаление отказали
+
+    await use_case.execute(_event(TriggerType.CALLBACK, payload="finish", message_id="m-ancient"))
+
+    assert port.sent[-1].text == "Готово, ."  # сценарий важнее уборки за платформой
+
+
+async def test_callback_without_message_id_sends_normally() -> None:
+    # message в callback_query отсутствует у слишком старых сообщений — править нечего.
+    use_case, port, _ = await _engine(_flow())
+    await use_case.execute(_event(TriggerType.TEXT, text="меню"))
+
+    await use_case.execute(_event(TriggerType.CALLBACK, payload="finish"))
+
+    assert port.edited == []
+    assert port.sent[-1].text == "Готово, ."
+
+
+async def test_text_event_never_edits_even_with_message_id() -> None:
+    # Защита в глубину: для текста message_id — чужое сообщение пользователя,
+    # его нельзя ни править, ни удалять (домен events.py заполняет только callback).
+    use_case, port, _ = await _engine(_flow())
+
+    await use_case.execute(_event(TriggerType.TEXT, text="меню", message_id="u-users-msg"))
+
+    assert port.edited == []
+    assert port.deleted == []
+    assert port.sent[-1].text == "Куда дальше?"
+
+
+async def test_notify_detour_does_not_consume_edit_target() -> None:
+    """Блок notify шлёт третьему лицу до ответа пользователю — правка достаётся пользователю."""
+    flow = Flow(
+        id="flow-notify-edit",
+        name="Уведомление после кнопки",
+        nodes={
+            "menu": Node(
+                id="menu",
+                type=NodeType.SHOW_BUTTONS,
+                params={"text": "Подтвердить?"},
+                buttons=(Button(label="Да", action=ButtonAction.NEXT, target="notify"),),
+            ),
+            "notify": Node(id="notify", type=NodeType.NOTIFY, params={"to": "admin", "text": "Заявка!"}),
+            "done": Node(id="done", type=NodeType.SEND_MESSAGE, params={"text": "Принято."}),
+        },
+        triggers=(Trigger(id="t", type=TriggerType.TEXT, target_node_id="menu", config={"pattern": "меню"}),),
+        transitions=(Transition(source_node_id="notify", target_node_id="done"),),
+    )
+    use_case, port, _ = await _engine(flow, notifications=StubNotificationTargets({"admin": "admin-chat"}))
+    await use_case.execute(_event(TriggerType.TEXT, text="меню"))
+
+    await use_case.execute(_event(TriggerType.CALLBACK, payload="notify", message_id="m-menu"))
+
+    admin = [c for c in port.sent if c.external_chat_id == "admin-chat"]
+    assert [c.text for c in admin] == ["Заявка!"]  # уведомление — новым сообщением админу
+    assert [c.text for c in port.edited] == ["Принято."]  # меню пользователя заменено ответом
 
 
 # ── блок notify (ADR-0010) ───────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.5"
-updated: 2026-07-10
+version: "1.6"
+updated: 2026-07-11
 verified_commit: ""
 owner: "teamlead"
 ---
@@ -75,6 +75,7 @@ owner: "teamlead"
 - [0009-max-adapter-thin-client.md](decisions/0009-max-adapter-thin-client.md) — MaxBotAdapter: тонкий httpx-клиент вместо SDK maxapi (proposed)
 - [0010-notify-block-and-notification-targets.md](decisions/0010-notify-block-and-notification-targets.md) — блок notify + адресаты уведомлений (роль → chat_id) (proposed)
 - [0011-session-pii-retention.md](decisions/0011-session-pii-retention.md) — ретеншен и стирание ПДн сессий (BR-008) (proposed)
+- [0012-message-edit-in-place.md](decisions/0012-message-edit-in-place.md) — обновление отправленных сообщений: edit-in-place ответа на нажатие (proposed)
 
 ### workflows/ — процессы под тип задачи (стабильный)
 - [new-feature.md](workflows/new-feature.md) — процесс новой фичи (включая связку со spec-kit)
