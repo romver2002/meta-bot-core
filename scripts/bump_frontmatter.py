@@ -2,8 +2,9 @@
 """Авто-bump `version`/`updated` для изменённых документов memory-bank.
 
 Снимает с людей и агентов механику версионирования: если ТЕЛО документа
-изменилось относительно базовой ревизии, а `version`/`updated` — нет,
-скрипт поднимает их сам. Идемпотентен: уже поднятые поля не трогает.
+изменилось относительно базовой ревизии, а `version`/`updated` не поднялись
+(или version уехала назад), скрипт чинит их сам, поднимая version от базовой.
+Идемпотентен: уже поднятые (выросшие) поля не трогает.
 
 Режимы:
   pre-commit (по умолчанию)  застейдженные файлы против HEAD; починенные
@@ -26,41 +27,81 @@ from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from mb_lib import bump_minor, get_scalar, set_scalar, split_document  # noqa: E402
+from mb_lib import (  # noqa: E402
+    bump_minor, get_scalar, normalize_newlines, set_scalar, split_document, version_increased,
+)
 
 
 def run_git(args: list[str], cwd: Path) -> str | None:
-    """stdout команды git или None при любой ошибке."""
+    """stdout команды git или None при любой ошибке.
+
+    `core.quotePath=false` заставляет git отдавать сырые UTF-8 пути,
+    а не octal-escape в кавычках — иначе кириллические имена файлов
+    молча выпадают из обработки.
+    """
     try:
         result = subprocess.run(
-            ["git", *args], cwd=cwd, capture_output=True, text=True,
-            encoding="utf-8", errors="replace", check=True,
+            ["git", "-c", "core.quotePath=false", *args], cwd=cwd,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", check=True,
         )
     except (OSError, subprocess.CalledProcessError):
         return None
     return result.stdout
 
 
+def ref_exists(ref: str, cwd: Path) -> bool:
+    return run_git(["rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"], cwd) is not None
+
+
 def file_at_ref(ref: str, rel: str, cwd: Path) -> str | None:
-    """Содержимое файла в ревизии (`ref:путь`); None, если файла там нет."""
-    return run_git(["show", f"{ref}:{rel}"], cwd)
+    """Содержимое файла в ревизии (`ref:путь`, LF-нормализованное); None, если файла нет."""
+    raw = run_git(["show", f"{ref}:{rel}"], cwd)
+    return None if raw is None else normalize_newlines(raw)
 
 
-def changed_bank_files(cwd: Path, base: str | None) -> list[str]:
-    """Изменённые memory-bank/**/*.md: staged против HEAD либо HEAD против base."""
+def changed_bank_files(cwd: Path, base: str | None) -> list[tuple[str | None, str]]:
+    """Пары (путь_в_базовой_ревизии, текущий_путь) для изменённых memory-bank/*.md.
+
+    Для переименований (статус R) базовый путь — СТАРОЕ имя, текущий — новое,
+    иначе переименование+правка обходит проверку bump. Для новых файлов (A)
+    базовый путь = None. `-z` даёт NUL-разделённый машинный вывод.
+    """
     if base is None:
-        args = ["diff", "--cached", "--name-only", "--diff-filter=ACMR", "--", "memory-bank"]
+        args = ["diff", "--cached", "--name-status", "-M", "-z", "--", "memory-bank"]
     else:
-        args = ["diff", "--name-only", "--diff-filter=ACMR", f"{base}...HEAD", "--", "memory-bank"]
+        args = ["diff", "--name-status", "-M", "-z", f"{base}..HEAD", "--", "memory-bank"]
     output = run_git(args, cwd)
     if output is None:
         return []
-    return [line for line in output.splitlines() if line.endswith(".md")]
+
+    tokens = output.split("\0")
+    pairs: list[tuple[str | None, str]] = []
+    i = 0
+    while i < len(tokens):
+        status = tokens[i]
+        if not status:
+            i += 1
+            continue
+        if status[0] in ("R", "C"):  # переименование/копия: старый и новый пути
+            old_path, new_path = tokens[i + 1], tokens[i + 2]
+            i += 3
+            if new_path.endswith(".md"):
+                pairs.append((old_path, new_path))
+        else:  # A/M/D — один путь
+            path = tokens[i + 1]
+            i += 2
+            if status[0] == "D" or not path.endswith(".md"):
+                continue
+            pairs.append((None if status[0] == "A" else path, path))
+    return pairs
 
 
 def stale_fields(old_text: str, new_text: str) -> list[str]:
     """Какие поля не подняты при изменившемся теле: [], ['version'], ['updated'], оба.
 
+    `version` считается непроставленным, если новая версия НЕ выросла относительно
+    базовой (равна или, по ошибке, понижена) — так ловится и забытый bump, и откат
+    номера назад. Ручной мажорный/минорный подъём (new > old) уважается.
     Пустой список — bump не нужен (тело не менялось, поля уже подняты
     или документ вне схемы — им займётся валидатор).
     """
@@ -69,19 +110,25 @@ def stale_fields(old_text: str, new_text: str) -> list[str]:
     if new_fm is None or old_fm is None or old_body == new_body:
         return []
     stale = []
-    if get_scalar(new_fm, "version") == get_scalar(old_fm, "version"):
+    if not version_increased(get_scalar(old_fm, "version"), get_scalar(new_fm, "version")):
         stale.append("version")
     if get_scalar(new_fm, "updated") == get_scalar(old_fm, "updated"):
         stale.append("updated")
     return stale
 
 
-def fix_text(text: str, fields: list[str], today: date) -> str:
-    """Поднимает только непроставленные поля (уважает ручной bump другого поля)."""
+def fix_text(text: str, fields: list[str], today: date, base_version: str | None = None) -> str:
+    """Поднимает только непроставленные поля (уважает ручной bump другого поля).
+
+    `base_version` — версия в базовой ревизии; version поднимается от неё, а не от
+    текущего (возможно, ошибочно пониженного) значения, чтобы номер не пополз назад.
+    Без base_version бампится от текущего значения (совместимость со старыми вызовами).
+    """
     fm_block, body = split_document(text)
     assert fm_block is not None  # гарантировано stale_fields
     if "version" in fields:
-        fm_block = set_scalar(fm_block, "version", f'"{bump_minor(get_scalar(fm_block, "version"))}"')
+        base = base_version if base_version is not None else get_scalar(fm_block, "version")
+        fm_block = set_scalar(fm_block, "version", f'"{bump_minor(base)}"')
     if "updated" in fields:
         fm_block = set_scalar(fm_block, "updated", today.isoformat())
     return fm_block + body
@@ -109,18 +156,33 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     root = Path(toplevel.strip())
 
-    old_ref = args.base if args.base is not None else "HEAD"
-    violations: list[str] = []
+    if args.base is not None:
+        if not ref_exists(args.base, root):
+            print(f"bump_frontmatter: базовая ревизия {args.base!r} недостижима "
+                  f"(опечатка/не сделан fetch?)", file=sys.stderr)
+            return 2  # git-ошибку не путаем с «всё чисто»
+        merge_base = run_git(["merge-base", args.base, "HEAD"], root)
+        if merge_base is None:
+            print(f"bump_frontmatter: нет общего предка с {args.base}", file=sys.stderr)
+            return 2
+        old_ref = merge_base.strip()  # сверяемся с точкой ветвления, как и отбор файлов
+    else:
+        old_ref = "HEAD"
 
-    for rel in changed_bank_files(root, args.base):
-        old_text = file_at_ref(old_ref, rel, root)
-        if old_text is None:
+    violations: list[str] = []
+    from mb_lib import load, save  # noqa: PLC0415 — локально, чтобы не тянуть в тесты логики
+
+    for old_rel, new_rel in changed_bank_files(root, old_ref if args.base else None):
+        if old_rel is None:
             continue  # новый файл: version/updated ставит автор, схему проверит валидатор
+        old_text = file_at_ref(old_ref, old_rel, root)
+        if old_text is None:
+            continue
         if args.base is None:
-            new_text = file_at_ref("", rel, root)  # ":путь" — содержимое индекса (stage 0)
+            new_text = file_at_ref("", new_rel, root)  # ":путь" — содержимое индекса (stage 0)
         else:
             try:
-                new_text = (root / rel).read_text(encoding="utf-8")
+                new_text = load(root / new_rel)
             except (OSError, UnicodeDecodeError):
                 continue
         if new_text is None:
@@ -130,19 +192,20 @@ def main(argv: list[str] | None = None) -> int:
         if not fields:
             continue
         if args.check:
-            if not rel.startswith("memory-bank/current/"):
-                violations.append(rel)
+            if not new_rel.startswith("memory-bank/current/"):
+                violations.append(new_rel)
             continue
 
-        disk_text = (root / rel).read_text(encoding="utf-8")
-        (root / rel).write_text(fix_text(disk_text, fields, date.today()), encoding="utf-8")
+        base_fm, _ = split_document(old_text)
+        base_version = get_scalar(base_fm, "version")  # бампим от базовой версии, не назад
+        save(root / new_rel, fix_text(load(root / new_rel), fields, date.today(), base_version))
         if args.base is None:
-            run_git(["add", rel], root)
-        print(f"bump_frontmatter: {rel} → {', '.join(fields)} обновлены")
+            run_git(["add", new_rel], root)
+        print(f"bump_frontmatter: {new_rel} → {', '.join(fields)} обновлены")
 
     if violations:
         for rel in violations:
-            print(f"ОШИБКА {rel}: тело изменено, а version/updated — нет. "
+            print(f"ОШИБКА {rel}: тело изменено, а version не поднята (или понижена) / updated не обновлён. "
                   f"Локальная починка: python scripts/bump_frontmatter.py --base {args.base}")
         return 1
     return 0

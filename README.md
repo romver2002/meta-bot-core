@@ -15,6 +15,8 @@
 
 - **Агентам и разработчикам** — вход в проект: [AGENTS.md](AGENTS.md) (карточка +
   обязательный протокол) и индекс базы знаний [memory-bank/README.md](memory-bank/README.md).
+- **Локальный запуск и первичная настройка клона** —
+  [memory-bank/ops/local-dev.md](memory-bank/ops/local-dev.md).
 - **Что за продукт и зачем** — [memory-bank/product/vision.md](memory-bank/product/vision.md).
 - **Архитектура** (Clean Architecture, строгий режим) —
   [memory-bank/architecture/overview.md](memory-bank/architecture/overview.md).

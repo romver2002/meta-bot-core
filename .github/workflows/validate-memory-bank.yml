@@ -7,12 +7,13 @@ on:
       - "AGENTS.md"
       - "CLAUDE.md"
       - ".claude/rules/**"
-      - "scripts/validate_memory_bank.py"
+      - "scripts/**"
   push:
     branches: [main, master]
     paths:
       - "memory-bank/**"
       - "AGENTS.md"
+      - "scripts/**"
   schedule:
     # база гниёт именно тогда, когда её НЕ трогают — раз в неделю проверяем свежесть
     - cron: "0 6 * * 1"
@@ -56,8 +57,10 @@ jobs:
           echo "warnings: $count"
           if [ "$count" -gt 0 ]; then
             python -c "import json;fs=[f for f in json.load(open('report.json'))['findings'] if f['severity']=='warning'];open('issue_body.md','w',encoding='utf-8').write('Предупреждений: '+str(len(fs))+'. Регламент разбора: memory-bank/_meta/lifecycle.md.'+chr(10)+chr(10)+chr(10).join('- ['+f['rule']+'] '+((f['path']+': ') if f['path'] else '')+f['message'] for f in fs))"
-            existing=$(gh issue list --state open --search "Memory bank: отчёт о свежести in:title" \
-              --json number --jq '.[0].number' --repo "$GITHUB_REPOSITORY" 2>/dev/null || true)
+            # Дедупликация детерминированная: точное совпадение title на стороне клиента
+            # (полнотекстовый --search ненадёжен для кириллицы с двоеточием).
+            existing=$(gh issue list --state open --json number,title --repo "$GITHUB_REPOSITORY" \
+              --jq 'map(select(.title=="Memory bank: отчёт о свежести"))[0].number' 2>/dev/null || true)
             if [ -n "$existing" ] && [ "$existing" != "null" ]; then
               gh issue comment "$existing" --body-file issue_body.md --repo "$GITHUB_REPOSITORY" || true
             else

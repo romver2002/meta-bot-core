@@ -65,7 +65,9 @@ def decide(porcelain: str, current_diff: str, today_iso: str) -> dict | None:
 
 def main() -> int:
     try:
-        payload = json.load(sys.stdin)
+        # stdin читаем как UTF-8 явно: на русской Windows locale-декодирование
+        # (cp1251) искажает кириллические пути в payload (cwd) → git не находит корень.
+        payload = json.loads(sys.stdin.buffer.read().decode("utf-8"))
         if payload.get("stop_hook_active"):
             return 0
         cwd = Path(payload.get("cwd") or Path.cwd())

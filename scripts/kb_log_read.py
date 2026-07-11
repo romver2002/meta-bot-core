@@ -50,7 +50,8 @@ def append_line(log_path: Path, line: str) -> None:
 def main() -> int:
     try:
         event = "session-start" if "--event" in sys.argv and "session-start" in sys.argv else "read"
-        payload = json.load(sys.stdin)
+        # UTF-8 явно: иначе на русской Windows кириллический file_path/cwd искажается (cp1251).
+        payload = json.loads(sys.stdin.buffer.read().decode("utf-8"))
         root = Path(payload.get("cwd") or Path.cwd())
         session = str(payload.get("session_id") or "-")
 

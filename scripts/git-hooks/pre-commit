@@ -1,7 +1,21 @@
 #!/bin/sh
 # Авто-bump version/updated для изменённых документов memory-bank.
-# Включение (один раз после клона): git config core.hooksPath scripts/git-hooks
-# На unix при необходимости: chmod +x scripts/git-hooks/pre-commit
-py=python
-command -v "$py" >/dev/null 2>&1 || py=python3
-exec "$py" "$(git rev-parse --show-toplevel)/scripts/bump_frontmatter.py"
+# Включение (один раз после клона): python scripts/setup.py
+#   (эквивалент вручную: git config core.hooksPath scripts/git-hooks;
+#    на unix — chmod +x scripts/git-hooks/pre-commit)
+root=$(git rev-parse --show-toplevel) || exit 2
+
+# Системный Python не трогает окружение и кэш во время commit; в uv-only клоне
+# используем проектный интерпретатор без синхронизации зависимостей.
+if command -v python >/dev/null 2>&1; then
+  exec python "$root/scripts/bump_frontmatter.py"
+fi
+if command -v python3 >/dev/null 2>&1; then
+  exec python3 "$root/scripts/bump_frontmatter.py"
+fi
+if command -v uv >/dev/null 2>&1; then
+  exec uv run --no-sync --project "$root" python "$root/scripts/bump_frontmatter.py"
+fi
+
+echo "pre-commit: не найдены uv, python или python3" >&2
+exit 127

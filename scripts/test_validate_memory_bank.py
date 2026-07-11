@@ -94,6 +94,16 @@ class FrontmatterSchemaTests(TreeCase):
         self.assertEqual(len(found), 1)
         self.assertIs(found[0].severity, v.Severity.WARNING)
 
+    def test_one_day_future_date_is_allowed_for_timezone_skew(self):
+        root = self.make_tree(self.minimal(**{"doc.md": fm(updated="2026-07-06") + "x\n"}))
+        self.assertNotIn("MB015", self.rules(self.run_validator(root)))
+
+    def test_two_days_future_date_is_warning(self):
+        root = self.make_tree(self.minimal(**{"doc.md": fm(updated="2026-07-07") + "x\n"}))
+        found = [f for f in self.run_validator(root) if f.rule == "MB015"]
+        self.assertEqual(len(found), 1)
+        self.assertIs(found[0].severity, v.Severity.WARNING)
+
     def test_invalid_decision_status(self):
         root = self.make_tree(self.minimal(
             **{"doc.md": fm(extra="decision_status: maybe\n") + "x\n"}))
@@ -218,6 +228,14 @@ class TodoMarkerTests(TreeCase):
         todos = [f for f in self.run_validator(root) if f.rule == "MB070"]
         self.assertEqual(len(todos), 1)
         self.assertIn("2", todos[0].message)
+
+    def test_leftover_examples_are_counted(self):
+        root = self.make_tree(self.minimal(
+            **{"doc.md": fm() + "Пример (замените своим): раз. Ещё замените своим.\n"}))
+        found = [f for f in self.run_validator(root) if f.rule == "MB071"]
+        self.assertEqual(len(found), 1)
+        self.assertIs(found[0].severity, v.Severity.INFO)
+        self.assertIn("2", found[0].message)
 
 
 class PolicyTests(TreeCase):

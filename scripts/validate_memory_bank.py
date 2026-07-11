@@ -30,7 +30,7 @@ import dataclasses
 import json
 import re
 import sys
-from datetime import date
+from datetime import date, timedelta
 from enum import Enum
 from pathlib import Path
 from typing import Callable, Iterable, Iterator
@@ -82,6 +82,7 @@ RULES: dict[str, Rule] = {r.id: r for r in (
     Rule("MB061", Severity.WARNING, "AGENTS.md приближается к бюджету автозагрузки"),
     Rule("MB062", Severity.WARNING, "AGENTS.md не найден в корне репозитория"),
     Rule("MB070", Severity.INFO, "остались маркеры TODO(template)"),
+    Rule("MB071", Severity.INFO, "остались примеры-заглушки «замените своим» (выжимка: убрать при адаптации)"),
     Rule("MB080", Severity.WARNING, "отсутствует memory-bank/_meta/policy.md (политика прав агентов)"),
     Rule("MB081", Severity.ERROR, "недопустимое значение policy_* флага"),
 )}
@@ -340,8 +341,11 @@ def check_frontmatter(ctx: Context) -> Iterator[Finding]:
             yield finding("MB014", doc.rel, "поле updated обязательно, формат YYYY-MM-DD")
         else:
             try:
-                if date.fromisoformat(updated) > ctx.today:
-                    yield finding("MB015", doc.rel, f"updated={updated} позже сегодняшней даты")
+                # Люфт в один день: bump штампует локальной датой разработчика,
+                # а CI-валидатор бежит в UTC — вечерний коммит восточнее UTC иначе
+                # даёт ложное «updated в будущем».
+                if date.fromisoformat(updated) > ctx.today + timedelta(days=1):
+                    yield finding("MB015", doc.rel, f"updated={updated} более чем на день позже сегодняшней даты")
             except ValueError:
                 yield finding("MB014", doc.rel, f"updated={updated!r} не разбирается как ISO-дата")
 
@@ -464,6 +468,19 @@ def check_template_todos(ctx: Context) -> Iterator[Finding]:
         total += ctx.agents_text.count("TODO(template)")
     if total:
         yield finding("MB070", "", f"осталось маркеров TODO(template): {total}")
+
+
+@check
+def check_leftover_examples(ctx: Context) -> Iterator[Finding]:
+    """MB071: примеры-заглушки, которые при адаптации проекта надо заменить/убрать.
+
+    Выжимка: пример рядом с реальным содержимым — шум и потенциальное
+    дублирование. INFO, а не WARNING, — чтобы не шуметь в самом шаблоне;
+    downstream-проект видит остаток лесов и вычищает.
+    """
+    total = sum(doc.text.count("замените своим") for doc in ctx.docs)
+    if total:
+        yield finding("MB071", "", f"осталось примеров-заглушек «замените своим»: {total}")
 
 
 @check

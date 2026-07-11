@@ -29,6 +29,7 @@ from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import mb_lib  # noqa: E402
 from mb_lib import split_document, touch  # noqa: E402
 
 ACTIVE = "memory-bank/current/active-context.md"
@@ -161,15 +162,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"mb_log: не найден {target.file}", file=sys.stderr)
         return 1
 
-    text = path.read_text(encoding="utf-8")
+    text = mb_lib.load(path)
     updated = insert_entry(text, target.heading, format_entry(args, entry_date), target.kind)
     if updated is None:
         print(f"mb_log: в {target.file} нет раздела «{target.heading}» "
               f"(структура файла изменена — поправьте маппинг в scripts/mb_log.py)", file=sys.stderr)
         return 1
 
-    touched = touch(updated, date.fromisoformat(entry_date))
-    path.write_text(touched if touched is not None else updated, encoding="utf-8")
+    # entry_date датирует саму запись; frontmatter updated — всегда сегодня
+    # (иначе --date в прошлом откатил бы updated и вызвал ложное MB050).
+    touched = touch(updated, date.today())
+    mb_lib.save(path, touched if touched is not None else updated)
     print(f"mb_log: записано в {target.file} → «{target.heading}»")
 
     _, body = split_document(touched or updated)
