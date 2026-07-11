@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-06
+version: "1.1"
+updated: 2026-07-11
 verified_commit: ""
 owner: ""
 ---
@@ -88,10 +88,11 @@ owner: ""
   песочницы (`CodeExecutorPort`): тип и код ошибки, без содержимого контекста блока.
 - Идентификатор корреляции в каждой записи запроса: `request_id` на границе HTTP,
   сквозная связка вебхука с исполнением через ключ идемпотентности (Redis) и
-  `bot_id`; как проброшено между presentation → application — уточнить у команды.
-- Структурно (JSON/key-value), а не интерполяцией в строку. Формат и библиотека
-  структурного логирования (например, structlog / python-json-logger) — уточнить
-  у команды.
+  `bot_id`; проброс — `ContextVar` в `application/observability.py`, ставит
+  HTTP-мидлварь, читает JSON-форматтер (ADR-0013); ответ несёт `X-Request-ID`.
+- Структурно: одна JSON-строка на запись (stdlib `logging` + свой форматтер,
+  решение [ADR-0013](../decisions/0013-structured-logging.md)); всегда stdout,
+  локально дополнительно файлы `logs/app.log` и `logs/errors.log` (ERROR+).
 
 ### Логировать запрещено
 

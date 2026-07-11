@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.1"
-updated: 2026-07-08
+version: "1.2"
+updated: 2026-07-11
 verified_commit: ""
 owner: ""
 ---
@@ -13,6 +13,19 @@ PostgreSQL 16 + SQLAlchemy 2 · Redis 7 · изолированный executor �
 TypeScript mini app; uv · ruff / mypy / import-linter; pytest; CI — GitHub Actions).
 К какому слою относится технология — [overview.md](overview.md). Крупные выборы
 фиксируются через ADR — [../decisions/README.md](../decisions/README.md).
+
+## Политика актуальности стека (решение владельца, Роман, 2026-07-11)
+
+Используем **самый современный стабильный стек, актуальный на 2026-07-11**,
+и держим его актуальным дальше:
+
+- новые зависимости берутся в последних стабильных версиях;
+- при обновлении инструментов и библиотек по умолчанию поднимаемся до последних
+  стабильных (точные версии фиксирует lock-файл `uv.lock`);
+- устаревшие API и паттерны не тащим «по привычке»: экосистема ушла вперёд —
+  идём за ней (через ADR, если выбор архитектурно значим);
+- «старое, потому что знакомое» — не аргумент; аргументы — стабильность релиза,
+  поддержка, совместимость с реестром ниже.
 
 ## Реестр
 
@@ -27,7 +40,7 @@ TypeScript mini app; uv · ruff / mypy / import-linter; pytest; CI — GitHub Ac
 | FastAPI | — | presentation: admin API конструктора + webhook-роуты | принята |
 | PostgreSQL | 16 | основное хранилище: `Bot`/`Flow`/`Session` (persistent) | принята |
 | SQLAlchemy (async) | 2.x | infrastructure: доступ к БД, реализация `FlowRepository`/`SessionRepository` | принята |
-| Redis | 7 | infrastructure: runtime-состояние FSM (`Session`) и идемпотентность вебхуков | принята |
+| Redis | 7 | infrastructure: идемпотентность вебхуков; hot-FSM `Session` — запланирован ADR-0008, пока не реализован (сессии в PG) | принята |
 | import-linter | — | контроль границ слоёв (`.importlinter`, команда `lint-imports`) | принята |
 | ruff | — | стиль: форматирование + линт | принята |
 | mypy | — | статическая типизация, режим strict | принята |

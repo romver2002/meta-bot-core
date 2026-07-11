@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-06
+version: "1.1"
+updated: 2026-07-11
 verified_commit: ""
 owner: ""
 ---
@@ -9,7 +9,7 @@ owner: ""
 # Стратегия тестирования
 
 Как meta-bot-core проверяет корректность по слоям Clean Architecture
-([overview.md](overview.md)). Стек тестов — pytest поверх Python 3.12 (async):
+([overview.md](overview.md)). Стек тестов — pytest поверх Python 3.14 (async):
 domain/application как быстрые тесты без I/O, infrastructure — интеграционные
 против реальных Postgres 16 / Redis 7 через testcontainers и фейкового HTTP
 платформ. Когда какие тесты обязательны по процессу —

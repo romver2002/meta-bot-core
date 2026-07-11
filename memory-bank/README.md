@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.6"
+version: "1.7"
 updated: 2026-07-11
 verified_commit: ""
 owner: "teamlead"
@@ -21,6 +21,18 @@ owner: "teamlead"
 | Hotfix / инцидент | [workflows/hotfix.md](workflows/hotfix.md), [ops/runbooks/README.md](ops/runbooks/README.md) | ops/environments.md, ops/observability.md |
 | Вопрос «почему так устроено» | [decisions/README.md](decisions/README.md) | architecture/overview.md |
 | Работа с самой базой | [_meta/lifecycle.md](_meta/lifecycle.md) | _meta/governance.md, _meta/frontmatter.md |
+
+## Как искать в базе (не читать подряд)
+
+1. **Маршрут под тип задачи** — начни с таблицы выше: открой обязательные файлы,
+   остальные подключай только по мере необходимости.
+2. **Точечный поиск** — ищи термин по базе через `rg -n "<термин>" memory-bank/`,
+   а файлы по имени — через `rg --files memory-bank/ | rg "<часть-имени>"`.
+   Названия и описания разделов ниже служат якорями для поиска.
+3. **Широкий обзор** — если нужно свести факты из многих документов, поручи
+   исследование субагенту и работай в основном контексте с его выжимкой.
+4. **Проверка свежести** — `updated` и `verified_commit` во frontmatter показывают,
+   насколько документ актуален без последовательного чтения истории git.
 
 ## Карта разделов
 
@@ -44,6 +56,7 @@ owner: "teamlead"
 
 ### architecture/ — инженерия (стабильный)
 - [overview.md](architecture/overview.md) — слои Clean Architecture, границы, поток зависимостей
+- [deployment.md](architecture/deployment.md) — топология деплоя: мультитенантный движок, бот = данные, что хранится на сервере
 - [platform-reference.md](architecture/platform-reference.md) — проверенный справочник Telegram Bot API и MAX Bot API (хосты, webhook, mini app)
 - [tech-stack.md](architecture/tech-stack.md) — стек и версии, что можно/нельзя добавлять
 - [patterns.md](architecture/patterns.md) — принятые паттерны и анти-паттерны
@@ -76,6 +89,7 @@ owner: "teamlead"
 - [0010-notify-block-and-notification-targets.md](decisions/0010-notify-block-and-notification-targets.md) — блок notify + адресаты уведомлений (роль → chat_id) (proposed)
 - [0011-session-pii-retention.md](decisions/0011-session-pii-retention.md) — ретеншен и стирание ПДн сессий (BR-008) (proposed)
 - [0012-message-edit-in-place.md](decisions/0012-message-edit-in-place.md) — обновление отправленных сообщений: edit-in-place ответа на нажатие (proposed)
+- [0013-structured-logging.md](decisions/0013-structured-logging.md) — структурное логирование и файлы ошибок (proposed)
 
 ### workflows/ — процессы под тип задачи (стабильный)
 - [new-feature.md](workflows/new-feature.md) — процесс новой фичи (включая связку со spec-kit)

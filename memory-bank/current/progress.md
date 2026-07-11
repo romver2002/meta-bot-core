@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.17"
+version: "1.18"
 updated: 2026-07-11
 verified_commit: ""
 owner: ""
@@ -28,6 +28,7 @@ owner: ""
 - 2026-07-10 — **BR-008 / ADR-0011, ПДн по закону**: завершение/просрочка сессии стирает `variables` (домен); фоновая чистка (`PurgeExpiredSessionsUseCase` за `SessionRetentionPort`) просрочивает зависшие FSM и удаляет завершённые сессии старше `SESSION_RETENTION_DAYS` целиком; в примере first-bot — экраны согласия перед сбором ПДн.
 - 2026-07-09..11 — `frontend/constructor/` актуализирован под живой Flow Engine/API (Engine v1 palette включая `notify`, `trigger.config`, `http_request`, панель «Боты и публикация», стартовый шаблон, безопасный путь публикации со скрытыми bot_id/row_version): кнопочные переходы видны на холсте; адаптивные связи, групповое выделение/копирование/удаление не меняют Flow-данные, снятие выделения чистит буфер, счётчик узлы/связи раздельный; FastAPI-ошибки нормализуются, проблемы публикации подсвечивают узлы, Error Boundary, drawer на мобильных; ширина панелей регулируется на десктопе (только localStorage, в Flow/API не входит). Гейты: `npm test` 16 и production build зелёные.
 - 2026-07-11 — ADR-0012 edit-in-place (ответ на нажатие правит сообщение с меню на месте, фолбэк — отправка+удаление; `edit_message`/`delete_message` в `BotPlatformPort`, различия платформ только в адаптерах) и read-контракт черновика `GET /api/bots/{id}/flow` (204 — черновика нет; пустое `name` не сбрасывает имя; не-UUID id → 404, а не 500). Гейт: 200 unit, mypy strict 93 файла, 6/6 контрактов.
+- 2026-07-11 — по вопросам владельца: ADR-0013 структурное логирование (JSON+request_id, stdout + локальные `logs/app.log`/`errors.log`, единый 500, WARN вместо молчаливых подавлений), типизированный исход вебхука (enum `WebhookOutcome`), [deployment.md](../architecture/deployment.md) (топология «мультитенантный движок, бот = данные»), раздел «Размещение» в ADR-0006, политика актуальности стека в tech-stack.md.
 - 2026-07-11 — `ask` с вариантами быстрого ответа (кнопки узла: payload = значение; свободный текст равноправен) — по фидбэку живого прогона; в примере first-bot услуга/срок/бюджет кнопками, вилки бюджета из прайс-листа зависят от услуги (condition-ветвление данными, 42 узла). Гейт: 206 unit.
 
 ## В работе
@@ -60,15 +61,14 @@ owner: ""
 
 - 2026-07-08 — канон портов ([overview](../architecture/overview.md)) не содержит порты Admin API/webhook/mini
   app/http/notify (`BotRepository`, `IdempotencyPort`, `HttpClientPort`, `SecretResolverPort`, `NotificationTargetResolverPort`, UC) — внести при ратификации ADR-0008/0009/0010.
+- 2026-07-11 — [ADR-0008](../decisions/0008-persistence-model.md) обещает hot-FSM Session в Redis (`session:{bot_id}:{user_id}`, write-through, лок), в коде сессии живут только в PG, Redis — лишь идемпотентность вебхуков; deployment.md описывает код. Реализовать Redis-FSM или скорректировать ADR при ратификации.
 
 ## Технический долг
 
 <!-- Только крупные пункты, влияющие на планирование. Мелочь — в issue-трекер.
      У каждого пункта — ссылка на issue и почему это долг (какое правило нарушено). -->
 
-- 2026-07-06 — не выбрано прод-хранилище секретов за `TokenVaultPort` — уточнить
-  у команды; блокирует безопасную реализацию BR-004/BR-007 ([overview](../architecture/overview.md)).
-- 2026-07-06 — пороги покрытия не ратифицированы (в CI действует ≥90% на domain/application).
+- 2026-07-06 — не выбрано прод-хранилище секретов за `TokenVaultPort` (блокирует BR-004/BR-007); пороги покрытия не ратифицированы (в CI ≥90% domain/application).
 - 2026-07-08 — отложено по аудиту (осознанно): (1) optimistic lock Bot между get/save — до IAM;
   (2) seed `capability_matrix` в БД — ждёт ратификации ADR-0005;
   (3) `session.flow_version_id/current_node_id` nullable вопреки design.md §1 (черновая сессия до первого шага).

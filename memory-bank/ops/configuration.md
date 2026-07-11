@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.2"
-updated: 2026-07-10
+version: "1.3"
+updated: 2026-07-11
 verified_commit: ""
 owner: ""
 ---
@@ -10,7 +10,7 @@ owner: ""
 
 Реестр всей конфигурации приложения: каждая переменная окружения, флаг и
 настройка — одной строкой в таблице ниже. Стек, к которому относятся переменные
-(Python 3.12 async · FastAPI · PostgreSQL 16 + SQLAlchemy 2 · Redis 7 ·
+(Python 3.14 async · FastAPI · PostgreSQL 16 + SQLAlchemy 2 · Redis 7 ·
 изолированный executor песочницы · TypeScript mini app) —
 [../architecture/tech-stack.md](../architecture/tech-stack.md).
 
@@ -41,7 +41,7 @@ owner: ""
 | Переменная | Назначение | Где задаётся | Секрет? | Пример |
 |---|---|---|---|---|
 | `DATABASE_URL` | строка подключения к PostgreSQL 16 — хранилище `Bot`/`Flow`/`Session` (async SQLAlchemy) | local: `.env`; stage/prod: секрет-хранилище | **да** | `postgresql+asyncpg://meta_bot:***@localhost:5432/meta_bot` |
-| `REDIS_URL` | подключение к Redis 7 — runtime-состояние FSM (`Session`) и идемпотентность вебхуков | local: `.env`; stage/prod: секрет-хранилище | **да** (в prod содержит пароль) | `redis://localhost:6379/0` |
+| `REDIS_URL` | подключение к Redis 7 — идемпотентность вебхуков (hot-FSM `Session` — план ADR-0008, пока в PG) | local: `.env`; stage/prod: секрет-хранилище | **да** (в prod содержит пароль) | `redis://localhost:6379/0` |
 | `SESSION_IDLE_TTL` | секунды без событий, после которых активная сессия просрочивается фоновой чисткой со стиранием переменных (BR-008) | local: `.env`; иначе: переменные CI/CD | нет | `3600` |
 | `SESSION_RETENTION_DAYS` | срок хранения завершённых/просроченных сессий; старше срока — строка удаляется целиком вместе с ПДн (BR-008, [ADR-0011](../decisions/0011-session-pii-retention.md)) | local: `.env`; иначе: переменные CI/CD | нет | `30` |
 | `SESSION_PURGE_INTERVAL` | интервал фоновой чистки сессий в секундах (composition root, lifespan) | local: `.env`; иначе: переменные CI/CD | нет | `3600` |
@@ -53,6 +53,7 @@ owner: ""
 | `WEBHOOK_BASE_URL` | публичный HTTPS-адрес, на который платформы шлют вебхуки (`/webhooks/telegram/{bot_id}`, `/webhooks/max/{bot_id}`); для Telegram допустимы только порты 443/80/88/8443 | dev/stage/prod: переменные CI/CD | нет | `https://bots.example.com` |
 | `APP_ENV` | текущее окружение (`local`/`dev`/`stage`/`prod`) — влияет на дефолты и деградации | local: `.env`; иначе: переменные CI/CD | нет | `local` |
 | `LOG_LEVEL` | уровень логирования (`DEBUG`/`INFO`/`WARNING`) | local: `.env`; иначе: переменные CI/CD | нет | `INFO` |
+| `LOG_DIR` | каталог файлов логов `app.log`/`errors.log` (ротация 5 МБ × 5); задаётся ТОЛЬКО локально (compose монтирует `./logs`), в проде пусто — только stdout ([ADR-0013](../decisions/0013-structured-logging.md)) | local: compose | нет | `logs` |
 
 ## Фиче-флаги и прочая конфигурация
 

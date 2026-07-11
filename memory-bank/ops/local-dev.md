@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.3"
-updated: 2026-07-09
+version: "1.4"
+updated: 2026-07-11
 verified_commit: ""
 owner: ""
 ---
@@ -33,6 +33,23 @@ owner: ""
       ([../architecture/security.md](../architecture/security.md)).
 - [ ] (Опционально) туннель для приёма вебхуков: `ngrok` или `cloudflared` —
       см. раздел «Приём вебхуков локально».
+
+## Первичная настройка (однократно на клон)
+
+Сразу после клонирования включи локальные предохранители репозитория:
+
+```bash
+uv run python scripts/setup.py
+```
+
+Команда настраивает `core.hooksPath` на репозиторный pre-commit-хук. Он автоматически
+поднимает `version`/`updated` изменённых документов базы при коммите; помнить о bump
+вручную не нужно. Проверить настройку без изменений можно командой
+`uv run python scripts/setup.py --check`. Если Python уже доступен в `PATH`, допустимы
+эквивалентные команды `python scripts/setup.py` и `python scripts/setup.py --check`.
+
+Хук даёт раннюю локальную обратную связь, а обязательный рубеж version bump остаётся
+в CI. Схема версий описана в [../_meta/frontmatter.md](../_meta/frontmatter.md).
 
 ## Шаги запуска с нуля
 
@@ -87,7 +104,10 @@ API** Telegram/MAX: закрыты флагом `policy_external_api_calls` (`as
 
 ## Локальные проверки перед коммитом
 
-Гоняются локально до пуша; те же проверки — в pre-commit и CI. Порядок:
+Эти проверки разработчик запускает локально до коммита или пуша; соответствующие
+гейты повторяются в CI. Репозиторный pre-commit-хук выполняет только автоматический
+bump `version`/`updated` документов и не запускает `lint-imports`, ruff, mypy или
+pytest. Порядок локального запуска:
 
 ```bash
 PYTHONPATH=src uv run lint-imports          # границы слоёв (import-linter, .importlinter)
