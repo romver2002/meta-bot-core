@@ -118,7 +118,7 @@ def test_example_flow_valid_for_publication() -> None:
     flow = _load_flow()
     # Не бросает: блоки/триггеры/кнопки в матрице v1, достижимость и детерминизм — ок.
     flow.validate_for_publication(ENGINE_V1_CAPABILITIES)
-    assert len(flow.nodes) == 32
+    assert len(flow.nodes) == 42
 
 
 def test_no_pii_collection_path_bypasses_consent() -> None:
@@ -312,6 +312,52 @@ async def test_stale_confirm_without_data_restarts_form_not_empty_card() -> None
     # Guard увёл на перезапуск формы: экран согласия (сбор ПДн — только после него).
     assert "Оформим заявку" in port.sent[-1].text
     assert "разрешаете" in port.sent[-1].text
+
+
+async def test_form_click_through_with_service_specific_budget_presets() -> None:
+    # Фидбэк живого прогона: услуга и бюджет — кнопками, вилки зависят от услуги
+    # (из прайс-листа), свою сумму по-прежнему можно вбить текстом.
+    use_case, port = await _engine()
+    await use_case.execute(_event(TriggerType.START))
+    await use_case.execute(_click("req_start"))
+    await use_case.execute(_click("req_ask_name"))  # согласие
+    await use_case.execute(_event(TriggerType.TEXT, text="Роман"))
+    await use_case.execute(_event(TriggerType.TEXT, text="@roman"))
+
+    assert "Сайт / лендинг" in [b.label for b in port.sent[-1].buttons]  # услуги кнопками
+    await use_case.execute(_event(TriggerType.CALLBACK, payload="Чат-бот"))
+
+    assert "1–2 недели" in [b.label for b in port.sent[-1].buttons]  # сроки кнопками
+    await use_case.execute(_event(TriggerType.CALLBACK, payload="1–2 недели"))
+
+    # Вилки бюджета — ИМЕННО для чат-бота (от 7 тыс по прайсу), не общие.
+    assert next(b.label for b in port.sent[-1].buttons) == "7–15 тыс ₽"
+    await use_case.execute(_event(TriggerType.CALLBACK, payload="7–15 тыс ₽"))
+
+    summary = port.sent[-1].text
+    assert "Чат-бот" in summary
+    assert "1–2 недели" in summary
+    assert "7–15 тыс ₽" in summary
+
+    await use_case.execute(_click("req_notify"))
+    admin_messages = [c for c in port.sent if c.external_chat_id == ADMIN_CHAT]
+    assert len(admin_messages) == 1
+    assert "7–15 тыс ₽" in admin_messages[0].text  # выбранная вилка дошла до админа
+
+
+async def test_typed_task_falls_through_to_generic_budget_presets() -> None:
+    use_case, port = await _engine()
+    await use_case.execute(_event(TriggerType.START))
+    await use_case.execute(_click("req_start"))
+    await use_case.execute(_click("req_ask_name"))
+    for answer in ("Иван", "+70000000000", "Нужна интеграция с 1С", "не важно"):
+        await use_case.execute(_event(TriggerType.TEXT, text=answer))
+
+    # Своя формулировка услуги -> дефолтные вилки бюджета.
+    assert next(b.label for b in port.sent[-1].buttons) == "до 10 тыс ₽"
+    await use_case.execute(_event(TriggerType.TEXT, text="12 000 ₽"))  # своя сумма текстом
+
+    assert "12 000 ₽" in port.sent[-1].text  # карточка подтверждения
 
 
 async def test_cancel_wipes_pii_and_blocks_stale_confirm() -> None:

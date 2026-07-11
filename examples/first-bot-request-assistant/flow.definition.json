@@ -344,28 +344,91 @@
       "id": "req_ask_task",
       "type": "ask",
       "params": {
-        "prompt": "Опишите задачу: что нужно сделать?",
+        "prompt": "Что нужно сделать? Выберите услугу или опишите своими словами.",
         "save_as": "req_task"
       },
-      "buttons": []
+      "buttons": [
+        {
+          "label": "Сайт / лендинг",
+          "action": "callback",
+          "target": "Сайт / лендинг"
+        },
+        {
+          "label": "Чат-бот",
+          "action": "callback",
+          "target": "Чат-бот"
+        },
+        {
+          "label": "Прототип и дизайн",
+          "action": "callback",
+          "target": "Прототип и дизайн"
+        },
+        {
+          "label": "Бизнес-план",
+          "action": "callback",
+          "target": "Бизнес-план"
+        },
+        {
+          "label": "Резюме",
+          "action": "callback",
+          "target": "Резюме"
+        }
+      ]
     },
     {
       "id": "req_ask_deadline",
       "type": "ask",
       "params": {
-        "prompt": "Желаемый срок? Если не важно — напишите «не важно».",
+        "prompt": "Желаемый срок? Выберите или напишите свой.",
         "save_as": "req_deadline"
       },
-      "buttons": []
+      "buttons": [
+        {
+          "label": "1–2 недели",
+          "action": "callback",
+          "target": "1–2 недели"
+        },
+        {
+          "label": "2–4 недели",
+          "action": "callback",
+          "target": "2–4 недели"
+        },
+        {
+          "label": "Не важно",
+          "action": "callback",
+          "target": "Не важно"
+        }
+      ]
     },
     {
       "id": "req_ask_budget",
       "type": "ask",
       "params": {
-        "prompt": "Ориентировочный бюджет? Если не определён — напишите «не определён».",
+        "prompt": "Ориентировочный бюджет? Выберите вилку или напишите свою сумму.",
         "save_as": "req_budget"
       },
-      "buttons": []
+      "buttons": [
+        {
+          "label": "до 10 тыс ₽",
+          "action": "callback",
+          "target": "до 10 тыс ₽"
+        },
+        {
+          "label": "10–30 тыс ₽",
+          "action": "callback",
+          "target": "10–30 тыс ₽"
+        },
+        {
+          "label": "30+ тыс ₽",
+          "action": "callback",
+          "target": "30+ тыс ₽"
+        },
+        {
+          "label": "Не определён",
+          "action": "callback",
+          "target": "Не определён"
+        }
+      ]
     },
     {
       "id": "req_summary",
@@ -582,6 +645,196 @@
         }
       },
       "buttons": []
+    },
+    {
+      "id": "req_budget_route_site",
+      "type": "condition",
+      "params": {
+        "expression": "req_task == 'Сайт / лендинг'"
+      },
+      "buttons": []
+    },
+    {
+      "id": "req_ask_budget_site",
+      "type": "ask",
+      "params": {
+        "prompt": "Ориентировочный бюджет? Выберите вилку или напишите свою сумму.",
+        "save_as": "req_budget"
+      },
+      "buttons": [
+        {
+          "label": "8–15 тыс ₽",
+          "action": "callback",
+          "target": "8–15 тыс ₽"
+        },
+        {
+          "label": "15–30 тыс ₽",
+          "action": "callback",
+          "target": "15–30 тыс ₽"
+        },
+        {
+          "label": "30+ тыс ₽",
+          "action": "callback",
+          "target": "30+ тыс ₽"
+        },
+        {
+          "label": "Не определён",
+          "action": "callback",
+          "target": "Не определён"
+        }
+      ]
+    },
+    {
+      "id": "req_budget_route_bot",
+      "type": "condition",
+      "params": {
+        "expression": "req_task == 'Чат-бот'"
+      },
+      "buttons": []
+    },
+    {
+      "id": "req_ask_budget_bot",
+      "type": "ask",
+      "params": {
+        "prompt": "Ориентировочный бюджет? Выберите вилку или напишите свою сумму.",
+        "save_as": "req_budget"
+      },
+      "buttons": [
+        {
+          "label": "7–15 тыс ₽",
+          "action": "callback",
+          "target": "7–15 тыс ₽"
+        },
+        {
+          "label": "15–30 тыс ₽",
+          "action": "callback",
+          "target": "15–30 тыс ₽"
+        },
+        {
+          "label": "30+ тыс ₽",
+          "action": "callback",
+          "target": "30+ тыс ₽"
+        },
+        {
+          "label": "Не определён",
+          "action": "callback",
+          "target": "Не определён"
+        }
+      ]
+    },
+    {
+      "id": "req_budget_route_proto",
+      "type": "condition",
+      "params": {
+        "expression": "req_task == 'Прототип и дизайн'"
+      },
+      "buttons": []
+    },
+    {
+      "id": "req_ask_budget_proto",
+      "type": "ask",
+      "params": {
+        "prompt": "Ориентировочный бюджет? Выберите вилку или напишите свою сумму.",
+        "save_as": "req_budget"
+      },
+      "buttons": [
+        {
+          "label": "10–20 тыс ₽",
+          "action": "callback",
+          "target": "10–20 тыс ₽"
+        },
+        {
+          "label": "20–40 тыс ₽",
+          "action": "callback",
+          "target": "20–40 тыс ₽"
+        },
+        {
+          "label": "40+ тыс ₽",
+          "action": "callback",
+          "target": "40+ тыс ₽"
+        },
+        {
+          "label": "Не определён",
+          "action": "callback",
+          "target": "Не определён"
+        }
+      ]
+    },
+    {
+      "id": "req_budget_route_plan",
+      "type": "condition",
+      "params": {
+        "expression": "req_task == 'Бизнес-план'"
+      },
+      "buttons": []
+    },
+    {
+      "id": "req_ask_budget_plan",
+      "type": "ask",
+      "params": {
+        "prompt": "Ориентировочный бюджет? Выберите вилку или напишите свою сумму.",
+        "save_as": "req_budget"
+      },
+      "buttons": [
+        {
+          "label": "20–35 тыс ₽",
+          "action": "callback",
+          "target": "20–35 тыс ₽"
+        },
+        {
+          "label": "35–60 тыс ₽",
+          "action": "callback",
+          "target": "35–60 тыс ₽"
+        },
+        {
+          "label": "60+ тыс ₽",
+          "action": "callback",
+          "target": "60+ тыс ₽"
+        },
+        {
+          "label": "Не определён",
+          "action": "callback",
+          "target": "Не определён"
+        }
+      ]
+    },
+    {
+      "id": "req_budget_route_resume",
+      "type": "condition",
+      "params": {
+        "expression": "req_task == 'Резюме'"
+      },
+      "buttons": []
+    },
+    {
+      "id": "req_ask_budget_resume",
+      "type": "ask",
+      "params": {
+        "prompt": "Ориентировочный бюджет? Выберите вилку или напишите свою сумму.",
+        "save_as": "req_budget"
+      },
+      "buttons": [
+        {
+          "label": "1,5–3 тыс ₽",
+          "action": "callback",
+          "target": "1,5–3 тыс ₽"
+        },
+        {
+          "label": "3–5 тыс ₽",
+          "action": "callback",
+          "target": "3–5 тыс ₽"
+        },
+        {
+          "label": "5+ тыс ₽",
+          "action": "callback",
+          "target": "5+ тыс ₽"
+        },
+        {
+          "label": "Не определён",
+          "action": "callback",
+          "target": "Не определён"
+        }
+      ]
     }
   ],
   "transitions": [
@@ -632,7 +885,7 @@
     },
     {
       "source_node_id": "req_ask_deadline",
-      "target_node_id": "req_ask_budget",
+      "target_node_id": "req_budget_route_site",
       "on": "next"
     },
     {
@@ -698,6 +951,81 @@
     {
       "source_node_id": "dev_wipe_cancel",
       "target_node_id": "n_menu",
+      "on": "next"
+    },
+    {
+      "source_node_id": "req_budget_route_site",
+      "target_node_id": "req_ask_budget_site",
+      "on": "true"
+    },
+    {
+      "source_node_id": "req_budget_route_site",
+      "target_node_id": "req_budget_route_bot",
+      "on": "false"
+    },
+    {
+      "source_node_id": "req_ask_budget_site",
+      "target_node_id": "req_summary",
+      "on": "next"
+    },
+    {
+      "source_node_id": "req_budget_route_bot",
+      "target_node_id": "req_ask_budget_bot",
+      "on": "true"
+    },
+    {
+      "source_node_id": "req_budget_route_bot",
+      "target_node_id": "req_budget_route_proto",
+      "on": "false"
+    },
+    {
+      "source_node_id": "req_ask_budget_bot",
+      "target_node_id": "req_summary",
+      "on": "next"
+    },
+    {
+      "source_node_id": "req_budget_route_proto",
+      "target_node_id": "req_ask_budget_proto",
+      "on": "true"
+    },
+    {
+      "source_node_id": "req_budget_route_proto",
+      "target_node_id": "req_budget_route_plan",
+      "on": "false"
+    },
+    {
+      "source_node_id": "req_ask_budget_proto",
+      "target_node_id": "req_summary",
+      "on": "next"
+    },
+    {
+      "source_node_id": "req_budget_route_plan",
+      "target_node_id": "req_ask_budget_plan",
+      "on": "true"
+    },
+    {
+      "source_node_id": "req_budget_route_plan",
+      "target_node_id": "req_budget_route_resume",
+      "on": "false"
+    },
+    {
+      "source_node_id": "req_ask_budget_plan",
+      "target_node_id": "req_summary",
+      "on": "next"
+    },
+    {
+      "source_node_id": "req_budget_route_resume",
+      "target_node_id": "req_ask_budget_resume",
+      "on": "true"
+    },
+    {
+      "source_node_id": "req_budget_route_resume",
+      "target_node_id": "req_ask_budget",
+      "on": "false"
+    },
+    {
+      "source_node_id": "req_ask_budget_resume",
+      "target_node_id": "req_summary",
       "on": "next"
     }
   ]
