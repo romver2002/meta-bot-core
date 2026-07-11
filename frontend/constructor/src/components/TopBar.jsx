@@ -63,6 +63,8 @@ export default function TopBar({
           className={`btn btn--ghost btn--toggle ${paletteOpen ? 'btn--ghost-on' : ''}`}
           onClick={onTogglePalette}
           aria-pressed={paletteOpen}
+          aria-expanded={paletteOpen}
+          aria-controls="constructor-palette"
         >
           Блоки
         </button>
@@ -71,10 +73,18 @@ export default function TopBar({
           className={`btn btn--ghost btn--toggle ${rightOpen ? 'btn--ghost-on' : ''}`}
           onClick={onToggleRight}
           aria-pressed={rightOpen}
+          aria-expanded={rightOpen}
+          aria-controls="constructor-inspector"
         >
           Панель
         </button>
-        <button type="button" className={`btn btn--ghost ${showJson ? 'btn--ghost-on' : ''}`} onClick={() => setShowJson(!showJson)}>
+        <button
+          type="button"
+          className={`btn btn--ghost ${showJson ? 'btn--ghost-on' : ''}`}
+          onClick={() => setShowJson(!showJson)}
+          aria-expanded={showJson}
+          aria-controls="flow-data-drawer"
+        >
           Данные Flow
         </button>
         <button type="button" className="btn btn--secondary" onClick={onCheck}>Проверить</button>

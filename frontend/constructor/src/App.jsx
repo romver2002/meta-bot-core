@@ -23,11 +23,22 @@ import ConfigPanel from './components/ConfigPanel.jsx'
 import TopBar from './components/TopBar.jsx'
 import JsonDrawer from './components/JsonDrawer.jsx'
 import ApiPanel from './components/ApiPanel.jsx'
+import PanelResizeHandle from './components/PanelResizeHandle.jsx'
 import { initialNodes, initialEdges } from './flow/initialFlow.js'
 import { buttonIndexFromHandle, isButtonEdge } from './flow/handles.js'
 import { createBlockSelectionSnapshot, pasteBlockSelectionSnapshot } from './flow/selection.js'
 import { serializeDefinition, validateFlow } from './flow/serialize.js'
 import { BLOCK_BY_TYPE, OUTCOME_LABELS, makeDefaultParams } from './domain/catalog.js'
+import {
+  PANEL_LIMITS,
+  clampJsonDrawerWidth,
+  clampRailWidth,
+  isDesktopViewport,
+  loadPanelWidths,
+  maxJsonDrawerWidth,
+  maxRailWidth,
+  savePanelWidths,
+} from './layout/panelLayout.js'
 
 let counter = 100
 
@@ -35,6 +46,15 @@ const newId = () => `n${counter++}`
 const newEdgeId = () => `e-${newId()}`
 const initialPaletteOpen = () => (typeof window === 'undefined' ? true : window.innerWidth > 900)
 const isCompactViewport = () => typeof window !== 'undefined' && window.innerWidth <= 900
+const initialViewportWidth = () => (typeof window === 'undefined' ? Number.POSITIVE_INFINITY : window.innerWidth)
+const browserStorage = () => {
+  try {
+    return window.localStorage
+  } catch {
+    return undefined
+  }
+}
+const initialPanelWidths = () => (typeof window === 'undefined' ? loadPanelWidths() : loadPanelWidths(browserStorage()))
 const OUTCOME_COLORS = { next: '#2563EB', true: '#16A34A', false: '#64748B', error: '#DC2626' }
 const initialPresentationEdges = initialEdges.map((edge) => ({
   ...edge,
@@ -133,6 +153,8 @@ function Editor() {
   const [paletteOpen, setPaletteOpen] = useState(initialPaletteOpen)
   const [rightOpen, setRightOpen] = useState(false)
   const [rightTab, setRightTab] = useState('settings')
+  const [panelWidths, setPanelWidths] = useState(initialPanelWidths)
+  const [viewportWidth, setViewportWidth] = useState(initialViewportWidth)
   const [selection, setSelection] = useState({ nodes: [], edges: [] })
   const [clipboardInfo, setClipboardInfo] = useState(null)
   const [graphRevision, setGraphRevision] = useState(0)
@@ -158,6 +180,40 @@ function Editor() {
   const clipboardRef = useRef(null)
   graphRef.current = { nodes, edges }
   const { screenToFlowPosition, setCenter, deleteElements } = useReactFlow()
+
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    savePanelWidths(browserStorage(), panelWidths)
+  }, [panelWidths])
+
+  useEffect(() => {
+    if (!isDesktopViewport(viewportWidth)) return
+    setPanelWidths((current) => {
+      const next = { ...current }
+      if (paletteOpen) {
+        next.palette = clampRailWidth('palette', current.palette, {
+          viewportWidth,
+          oppositeOpen: rightOpen,
+          oppositeWidth: current.inspector,
+        })
+      }
+      if (rightOpen) {
+        next.inspector = clampRailWidth('inspector', current.inspector, {
+          viewportWidth,
+          oppositeOpen: paletteOpen,
+          oppositeWidth: next.palette,
+        })
+      }
+      next.json = clampJsonDrawerWidth(current.json, viewportWidth)
+      return Object.keys(next).every((key) => next[key] === current[key]) ? current : next
+    })
+  }, [paletteOpen, rightOpen, viewportWidth])
 
   const nodeTypes = useMemo(() => ({ block: BlockNode, trigger: TriggerNode }), [])
   const touchGraph = useCallback(() => {
@@ -586,6 +642,33 @@ function Editor() {
     if (nextOpen && isCompactViewport()) setPaletteOpen(false)
   }, [rightOpen])
 
+  const resizePanel = useCallback((panel, width) => {
+    if (!isDesktopViewport(viewportWidth)) return
+    setPanelWidths((current) => {
+      let nextWidth
+      if (panel === 'palette') {
+        nextWidth = clampRailWidth('palette', width, {
+          viewportWidth,
+          oppositeOpen: rightOpen,
+          oppositeWidth: current.inspector,
+        })
+      } else if (panel === 'inspector') {
+        nextWidth = clampRailWidth('inspector', width, {
+          viewportWidth,
+          oppositeOpen: paletteOpen,
+          oppositeWidth: current.palette,
+        })
+      } else {
+        nextWidth = clampJsonDrawerWidth(width, viewportWidth)
+      }
+      return current[panel] === nextWidth ? current : { ...current, [panel]: nextWidth }
+    })
+  }, [paletteOpen, rightOpen, viewportWidth])
+
+  const resetPanelWidth = useCallback((panel) => {
+    resizePanel(panel, PANEL_LIMITS[panel].default)
+  }, [resizePanel])
+
   const onConnected = useCallback((bot) => {
     setPlatform(bot.platform)
     setBotName(bot.name)
@@ -611,6 +694,18 @@ function Editor() {
     setBotSession((current) => ({ ...current, status: bot.status }))
   }, [])
 
+  const paletteMaxWidth = maxRailWidth('palette', {
+    viewportWidth,
+    oppositeOpen: rightOpen,
+    oppositeWidth: panelWidths.inspector,
+  })
+  const inspectorMaxWidth = maxRailWidth('inspector', {
+    viewportWidth,
+    oppositeOpen: paletteOpen,
+    oppositeWidth: panelWidths.palette,
+  })
+  const jsonMaxWidth = maxJsonDrawerWidth(viewportWidth)
+
   return (
     <div className="app">
       <TopBar
@@ -630,15 +725,31 @@ function Editor() {
         onToggleRight={toggleRight}
       />
 
-      <div className={`workspace ${!paletteOpen ? 'workspace--noPalette' : ''} ${!rightOpen ? 'workspace--noRight' : ''}`}>
+      <div
+        className={`workspace ${!paletteOpen ? 'workspace--noPalette' : ''} ${!rightOpen ? 'workspace--noRight' : ''}`}
+        style={{ '--left-rail-width': `${panelWidths.palette}px`, '--right-rail-width': `${panelWidths.inspector}px` }}
+      >
         {paletteOpen && (
-          <div className="leftRail">
+          <div className="leftRail" id="constructor-palette">
             <div className="railHead">
               <span>Добавить в сценарий</span>
               <button className="icon-btn" type="button" onClick={() => setPaletteOpen(false)} aria-label="Закрыть палитру">✕</button>
             </div>
             <Palette platform={platform} onAdd={onPaletteAdd} />
           </div>
+        )}
+
+        {paletteOpen && (
+          <PanelResizeHandle
+            side="left"
+            value={panelWidths.palette}
+            min={PANEL_LIMITS.palette.min}
+            max={paletteMaxWidth}
+            label="Изменить ширину палитры блоков"
+            controls="constructor-palette"
+            onResize={(width) => resizePanel('palette', width)}
+            onReset={() => resetPanelWidth('palette')}
+          />
         )}
 
         <div className="canvas" onDrop={onDrop} onDragOver={onDragOver}>
@@ -756,7 +867,20 @@ function Editor() {
         </div>
 
         {rightOpen && (
-          <div className="rightRail">
+          <PanelResizeHandle
+            side="right"
+            value={panelWidths.inspector}
+            min={PANEL_LIMITS.inspector.min}
+            max={inspectorMaxWidth}
+            label="Изменить ширину панели настроек"
+            controls="constructor-inspector"
+            onResize={(width) => resizePanel('inspector', width)}
+            onReset={() => resetPanelWidth('inspector')}
+          />
+        )}
+
+        {rightOpen && (
+          <div className="rightRail" id="constructor-inspector">
             <div className="rightRail__head">
               <div className="tabs" role="tablist" aria-label="Правая панель">
                 <button type="button" role="tab" className={`tab ${rightTab === 'settings' ? 'tab--on' : ''}`} onClick={() => setRightTab('settings')} aria-selected={rightTab === 'settings'}>
@@ -800,7 +924,17 @@ function Editor() {
         <button className="drawerScrim" type="button" onClick={() => { setPaletteOpen(false); setRightOpen(false) }} aria-label="Закрыть панели" />
       )}
 
-      {showJson && <JsonDrawer flow={flow} onClose={() => setShowJson(false)} />}
+      {showJson && (
+        <JsonDrawer
+          flow={flow}
+          onClose={() => setShowJson(false)}
+          width={panelWidths.json}
+          minWidth={PANEL_LIMITS.json.min}
+          maxWidth={jsonMaxWidth}
+          onResize={(width) => resizePanel('json', width)}
+          onReset={() => resetPanelWidth('json')}
+        />
+      )}
     </div>
   )
 }
