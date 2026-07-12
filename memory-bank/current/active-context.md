@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.39"
+version: "1.42"
 updated: 2026-07-12
 verified_commit: ""
 owner: ""
@@ -47,6 +47,9 @@ owner: ""
 - 2026-07-12 — ADR-0006 ратифицирован: `frontend/miniapp/` — framework-free TypeScript 7/Vite 8 runtime; bridge загружается лениво для Telegram/MAX, Browser остаётся безопасным preview; init data не хранится на клиенте, CORS — точный allowlist. 16 Vitest зелёные, initial bundle: JS 4.55 KiB gzip, CSS 2.15 KiB gzip.
 - 2026-07-12 — Пост-верификация синхронизации (рой 34 агента): 5 моих ошибок исправлены (WEBHOOK_BASE_URL план→реестр, §API→§Решение ADR-0008, счётчик тестов→устойчивая формулировка); закрыты пробелы индекса README (ADR-0014, backup-restore.md — их добавил параллельный контур mini app/webhook/CORS/backup). Дерево устаканилось: ruff зелёный, lint-imports 6/6, 241 unit. Коммит не делал — политика policy_commit: ask, явной команды не было
 - 2026-07-12 — ADR-0014: авто-регистрация вебхука при publish (WEBHOOK_BASE_URL, register_webhook в порту+адаптерах TG/MAX); CORS для mini app (CORS_ALLOWED_ORIGINS, канонизация origin, валидация WEBHOOK_SECRET); каркас frontend/miniapp (bridge TG/MAX/Browser); этап 0 CRM в first-bot (http_request до wipe + error-ветка); бэкапы PG (pg-backup + runbook). Рой-ревью 5 областей: 7 should-fix вложено, bot_id-находка отклонена (uuid.UUID нормализует). Гейты: 255 unit, mypy strict, ruff, lint-imports 6/6, miniapp build+vitest 16
+- 2026-07-12 — Живой контур: стек поднят, оба бота published (MetaFlowAssistantBot=telegram, MetaFlow MAX Smoke=max). Диагностика молчания — вебхук TG указывал на мёртвый cloudflared-туннель (ошибка 530, 2 апдейта в очереди), не связано с правками сессии (config стартует чисто, флаги WEBHOOK_BASE_URL/CORS не заданы). Дошит проброс WEBHOOK_BASE_URL/WEBHOOK_SECRET в compose api (был пробел: ADR-0014 не был usable в dev-контуре). Ждём свежий туннель для перерегистрации вебхука и живого прогона
+- 2026-07-12 — MAX answer_callback починен по живому прогону: MAX /answers требует непустое тело — шлём {notification:''} (тихий дисмисс без тоста, 200), а не {} (400 message/notification required); захват сырого payload подтвердил, что callback.callback_id извлекаем верно. Тест обновлён, варнинг на live-callback исчез. Также записан риск: сертификат Минцифры дописан в ГЛОБАЛЬНЫЙ certifi образа (Dockerfile) — доверие расширено на весь исходящий трафик; сузить до httpx-клиента MAX-адаптера (SSL-context) — задача
+- 2026-07-12 — Доверие сертификату Минцифры сужено до MAX-адаптера (задача из прошлой записи закрыта): корень вынесен из глобального certifi образа (Dockerfile) в отдельный SSL-контекст (infrastructure/platforms/max/tls.py), MAX-адаптер получает свой httpx-клиент из composition root; MAX_CA_BUNDLE в config. Проверено live после пересборки: глобальный certifi чист, MAX publish 200 через суженный клиент, Telegram 200 на дефолтном доверии. 260 unit, mypy strict, lint-imports 6/6
 
 ## Следующие шаги
 

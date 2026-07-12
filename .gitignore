@@ -42,3 +42,6 @@ backups/
 
 # pytest tmp_path (basetemp)
 .tmp-pytest/
+
+# локальный бинарь туннеля (не коммитим)
+cloudflared.exe

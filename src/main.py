@@ -45,6 +45,7 @@ from infrastructure.maintenance.session_purge import run_periodic_purge
 from infrastructure.observability.logging_setup import configure_logging
 from infrastructure.platforms.factory import RegistryPlatformFactory
 from infrastructure.platforms.max.adapter import MaxBotAdapter
+from infrastructure.platforms.max.tls import build_max_http_client
 from infrastructure.platforms.telegram.adapter import TelegramBotAdapter
 from infrastructure.security.file_connection_secrets import FileConnectionSecrets
 from infrastructure.security.file_notification_targets import FileNotificationTargets
@@ -89,6 +90,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         with contextlib.suppress(asyncio.CancelledError):
             await purge_task
         await app.state.http_client.aclose()
+        await app.state.max_http_client.aclose()
         await app.state.engine.dispose()
 
 
@@ -98,6 +100,9 @@ def create_app() -> FastAPI:
     engine = build_engine(settings)
     session_factory = build_session_factory(engine)
     http_client = httpx.AsyncClient(timeout=10.0)
+    # MAX-адаптер — отдельный клиент с суженным доверием к сертификату Минцифры
+    # (только соединения с MAX доверяют этому корню, не весь трафик).
+    max_http_client = build_max_http_client(ca_bundle=settings.max_ca_bundle, timeout=10.0)
 
     bots = PgBotRepository(session_factory)
     flows = PgFlowRepository(session_factory)
@@ -106,7 +111,7 @@ def create_app() -> FastAPI:
     platform_factory = RegistryPlatformFactory(
         {
             Platform.TELEGRAM: TelegramBotAdapter(http_client),
-            Platform.MAX: MaxBotAdapter(http_client),
+            Platform.MAX: MaxBotAdapter(max_http_client),
         }
     )
     idempotency = RedisIdempotency.from_settings(settings)
@@ -132,6 +137,7 @@ def create_app() -> FastAPI:
     app.state.settings = settings
     app.state.engine = engine
     app.state.http_client = http_client
+    app.state.max_http_client = max_http_client
     app.state.purge_sessions = PurgeExpiredSessionsUseCase(
         sessions,
         idle_ttl_seconds=settings.session_idle_ttl,

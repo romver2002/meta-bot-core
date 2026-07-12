@@ -184,12 +184,19 @@ class MaxBotAdapter:
             return None
 
     async def answer_callback(self, command: AnswerCallbackCommand) -> None:
-        """POST /answers?callback_id= — defensive-политика «всегда отвечать» (specs/002)."""
+        """POST /answers?callback_id= — гасит «часики» кнопки.
+
+        MAX требует НЕПУСТОЕ тело (``message`` или ``notification``): на ``{}``
+        отвечает 400 ``proto.payload: message or notification required`` (проверено
+        живым прогоном 2026-07-12). Пустая ``notification`` даёт 200 и гасит
+        индикатор БЕЗ всплывающего тоста — тихий дисмисс, аналог Telegram
+        answerCallbackQuery без текста.
+        """
         try:
             response = await self._client.post(
                 f"{self._base_url}/answers",
                 params={"callback_id": command.callback_id},
-                json={},
+                json={"notification": ""},
                 headers={"Authorization": command.bot_token},
             )
             response.raise_for_status()

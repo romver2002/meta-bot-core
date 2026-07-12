@@ -70,6 +70,10 @@ class Settings(BaseSettings):
     token_vault_file: str = ".secrets/token-vault.json"  # noqa: S105 — путь к файлу, не пароль
     connection_secrets_file: str = ".secrets/connections.json"
     notification_targets_file: str = ".secrets/notification-targets.json"
+    # Доп. корневой CA для доверия ТОЛЬКО в MAX-адаптере (сертификат Минцифры):
+    # platform-api2.max.ru отдаёт цепочку под этот корень, которого нет в certifi.
+    # Пусто/файла нет — MAX-клиент на дефолтном доверии (TLS к MAX упадёт).
+    max_ca_bundle: str = "ops/certs/russian_trusted_root_ca.pem"
 
     @field_validator("cors_allowed_origins")
     @classmethod
@@ -107,9 +111,12 @@ class Settings(BaseSettings):
 
         Секрет с недопустимым символом (например ``_`` для MAX) или короче 5
         символов навсегда провалил бы регистрацию вебхука 502-ошибкой, а причину
-        пришлось бы выуживать из ответа платформы.
+        пришлось бы выуживать из ответа платформы. Пустая строка из env
+        (``WEBHOOK_SECRET=`` / compose ``${WEBHOOK_SECRET:-}``) = «не задано» -> None.
         """
-        if secret is not None and not _WEBHOOK_SECRET_RE.match(secret):
+        if secret is None or not secret.strip():
+            return None
+        if not _WEBHOOK_SECRET_RE.match(secret):
             raise ValueError(
                 "WEBHOOK_SECRET: допустимы 5..256 символов [A-Za-z0-9-] "
                 "(пересечение требований Telegram и MAX, specs/002)"

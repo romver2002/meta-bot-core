@@ -133,7 +133,14 @@ def test_settings_accept_valid_webhook_secret(secret: str) -> None:
     assert Settings(webhook_secret=secret, _env_file=None).webhook_secret == secret
 
 
-@pytest.mark.parametrize("secret", ["abcd", "has_underscore", "bad!char", "a" * 257, ""])
+@pytest.mark.parametrize("raw", ["", "   ", None])
+def test_settings_empty_webhook_secret_is_none(raw: str | None) -> None:
+    # Пустая строка из env (compose ${WEBHOOK_SECRET:-}) = «не задано» -> None,
+    # иначе валидатор ронял бы старт api (баг, пойманный живым прогоном 2026-07-12).
+    assert Settings(webhook_secret=raw, _env_file=None).webhook_secret is None
+
+
+@pytest.mark.parametrize("secret", ["abcd", "has_underscore", "bad!char", "a" * 257])
 def test_settings_reject_invalid_webhook_secret(secret: str) -> None:
     # С ADR-0014 секрет уходит платформам: недопустимый символ/длина навсегда
     # ломали бы регистрацию вебхука — ловим на старте, не в 502 от платформы.

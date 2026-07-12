@@ -7,6 +7,8 @@ MAX: POST /answers, id в QUERY (callback_id), токен в Authorization.
 
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 
@@ -49,7 +51,9 @@ async def test_max_answer_callback_contract() -> None:
     assert request.url.path == "/answers"
     assert request.url.params["callback_id"] == "cb-xyz"  # id в query, не в теле
     assert request.headers["Authorization"] == "max-token"
-    assert request.read() == b"{}"  # пустое тело: message/notification не шлём (v1 — только ack)
+    # MAX требует непустое тело: пустая notification гасит «часики» без тоста
+    # (на {} MAX отвечает 400 message/notification required — проверено live 2026-07-12).
+    assert json.loads(request.read()) == {"notification": ""}
 
 
 async def test_http_error_becomes_application_error() -> None:

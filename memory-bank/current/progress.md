@@ -1,6 +1,6 @@
 ---
 status: active
-version: "1.21"
+version: "1.22"
 updated: 2026-07-12
 verified_commit: ""
 owner: ""

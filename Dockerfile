@@ -23,12 +23,12 @@ RUN --mount=type=cache,target=/tmp/uv-cache \
 COPY src/ ./src/
 COPY alembic.ini ./
 COPY migrations/ ./migrations/
+# Сертификат Минцифры кладём в образ, но НЕ дописываем в глобальный certifi:
+# доверие к нему сужено до отдельного SSL-контекста MAX-адаптера
+# (infrastructure/platforms/max/tls.py) — Telegram/OpenRouter его не трогают.
 COPY ops/certs/russian_trusted_root_ca.pem ./ops/certs/
 RUN --mount=type=cache,target=/tmp/uv-cache \
     UV_NO_SYNC=0 uv sync --frozen --no-dev \
-    # Сертификат Минцифры в certifi: без него исходящие в platform-api2.max.ru
-    # падают по TLS (раньше добавлялся вручную и терялся при пересоздании).
-    && cat ops/certs/russian_trusted_root_ca.pem >> "$(uv run python -c 'import certifi; print(certifi.where())')" \
     && chown -R app:app /app
 
 # Runtime-кэш uv — в путь, который непривилегированный app может создать
