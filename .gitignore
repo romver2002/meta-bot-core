@@ -39,3 +39,6 @@ logs/
 
 # Дампы PG (pg-backup, compose): содержат ПДн сессий
 backups/
+
+# pytest tmp_path (basetemp)
+.tmp-pytest/
