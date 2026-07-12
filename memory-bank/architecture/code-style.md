@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-06
+version: "1.1"
+updated: 2026-07-12
 verified_commit: ""
 owner: ""
 ---
@@ -39,9 +39,9 @@ owner: ""
   сначала добавь его туда, потом используй в коде.
 - Один термин — одно имя: не `Bot` в одном модуле и `Chatbot` в другом; не
   `Flow` и `Scenario` вперемешку.
-- Use case — глагол + существительное + `UseCase`: `RunFlowUseCase`,
-  `CreateBotUseCase`, `PublishBotUseCase`, `ProcessUpdateUseCase`,
-  `SendMessageUseCase`, `OpenMiniAppUseCase`, `ExecuteNodeUseCase`.
+- Use case — глагол + существительное + `UseCase`: `CreateBotUseCase`,
+  `PublishBotUseCase`, `ProcessUpdateUseCase`, `AttachMiniAppUseCase`,
+  `AuthenticateMiniAppUseCase`, `SubmitMiniAppResultUseCase`.
 - Порт и реализация:
   - порт-репозиторий → реализация с префиксом технологии: `FlowRepository` →
     `PgFlowRepository`, `SessionRepository` → `PgSessionRepository`;
@@ -51,7 +51,7 @@ owner: ""
   прячут отсутствие ответственности; см. анти-паттерны в [patterns.md](patterns.md).
 - Регистры (Python): модули и функции — `snake_case`, классы — `PascalCase`,
   константы — `UPPER_SNAKE_CASE`, имена файлов — `snake_case`
-  (`run_flow.py`, `bot_platform.py`).
+  (`process_update.py`, `bot_platform.py`).
 
 ## Структура модулей
 
@@ -63,7 +63,7 @@ owner: ""
 
 ```
 application/
-  use_cases/          run_flow.py  create_bot.py  process_update.py  …
+  use_cases/          process_update.py  create_bot.py  publish_bot.py  …
   ports/              bot_platform.py  flow_repository.py  session_repository.py  …
 infrastructure/
   platforms/

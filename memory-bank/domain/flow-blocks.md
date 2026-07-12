@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.2"
-updated: 2026-07-11
+version: "1.3"
+updated: 2026-07-12
 verified_commit: ""
 owner: ""
 ---
@@ -16,7 +16,7 @@ ADR [0003](../decisions/0003-flow-engine-blocks-and-sandbox.md). Почему б
 [0005](../decisions/0005-capability-matrix.md) и
 [../architecture/platform-reference.md](../architecture/platform-reference.md).
 
-Блок — это **данные** (тип + параметры), а не код. Движок (`RunFlowUseCase`)
+Блок — это **данные** (тип + параметры), а не код. Движок (`ProcessUpdateUseCase`)
 исполняет граф блоков; пользовательский Python исполняется только через
 `CodeExecutorPort` в песочнице (BR-004). Блоки — единые для всех платформ; в
 платформенное представление их переводит адаптер за `BotPlatformPort` (BR-005).
@@ -27,8 +27,8 @@ ADR [0003](../decisions/0003-flow-engine-blocks-and-sandbox.md). Почему б
 
 | Тип | Когда срабатывает | Данные |
 |---|---|---|
-| `/start` | команда старта бота | — |
-| `text` | входящее текстовое сообщение (точное совпадение/паттерн) | текст |
+| `start` | команда старта бота (`/start`) | — |
+| `text` | входящее текстовое сообщение: точное равенство `config["pattern"]`; если `pattern` не задан — любой текст (регэкспов/паттернов нет) | текст |
 | `callback` | нажатие inline-кнопки (`ButtonClicked`) | payload кнопки |
 | `mini_app_result` | mini app вернул результат (`MiniAppOpened` → результат) | данные из mini app (после валидации init data, BR-007) |
 
@@ -43,15 +43,15 @@ ADR [0003](../decisions/0003-flow-engine-blocks-and-sandbox.md). Почему б
 
 | Тип узла | Что делает | Ключевые параметры | Порт / реализация |
 |---|---|---|---|
-| `send_message` | отправляет пользователю текст (с переменными сценария) | `text` (шаблон с подстановками), опц. вложение | `BotPlatformPort.send_message` → `SendMessageUseCase` |
+| `send_message` | отправляет пользователю текст (с переменными сценария) | `text` (шаблон с подстановками), опц. вложение | движок (`ProcessUpdateUseCase._run_chain`) → `BotPlatformPort.send_message` |
 | `show_buttons` | отправляет сообщение с кнопками (`Button`) | `text`, список `Button` (подпись + действие) | `BotPlatformPort` (маппер кнопок в адаптере) |
-| `ask` | задаёт вопрос и ждёт ответ пользователя, сохраняя его в переменную; кнопки узла — варианты быстрого ответа (payload = значение), свободный текст равноправен | `prompt`, `save_as` (имя переменной), опц. `Button`-варианты (action=callback), опц. валидация | движок + `SessionRepository` (перевод FSM в ожидание) |
+| `ask` | задаёт вопрос и ждёт ответ пользователя, сохраняя его в переменную; кнопки узла — варианты быстрого ответа (payload = значение), свободный текст равноправен | `prompt`, `save_as` (имя переменной), опц. `Button`-варианты (action=callback) | движок + `SessionRepository` (перевод FSM в ожидание) |
 | `condition` | ветвление по условию над переменными сценария | выражение/сравнение, ветви `true`/`false` | движок (без внешних вызовов) |
-| `open_mini_app` | показывает кнопку запуска mini app, привязанного к боту | ссылка на `MiniApp` (HTTPS, BR-003) | `BotPlatformPort.build_mini_app_button` (Telegram `WebAppInfo` / кнопка MAX) |
-| `save` | сохраняет данные в состояние/во внешнюю систему | ключ, значение/маппинг | `SessionRepository` (переменные) или порт хранилища |
+| `open_mini_app` | показывает кнопку запуска mini app, привязанного к боту | ссылка на `MiniApp` (HTTPS, BR-003) | движок строит `Button(action=open_mini_app, target=mini_app_url)` и шлёт через `BotPlatformPort.send_message`; в платформенную кнопку (Telegram `WebAppInfo` / кнопка MAX) переводит адаптер |
+| `save` | сохраняет данные в переменные сценария (`Session`); запись во внешнюю систему — план | ключ, значение/маппинг | `SessionRepository` (переменные `Session`); порт внешнего хранилища не реализован (план) |
 | `http_request` | вызывает внешний HTTP-API и кладёт ответ в переменные | метод, URL, заголовки, маппинг ответа | инфраструктурный HTTP-клиент за портом (не в ядре) |
 | `notify` | шлёт сообщение третьему лицу — адресату роли (заявка админу и т.п.), best-effort: сбой не рвёт цепочку (ADR [0010](../decisions/0010-notify-block-and-notification-targets.md)) | `to` (символическая роль: `admin`, `developer`, …), `text` (шаблон) | `NotificationTargetResolverPort` (роль → chat_id) + `BotPlatformPort.send_message` |
-| `custom_code` | исполняет пользовательский Python-блок как чистую функцию | `code_id`/версия, `input_mapping`, `output_mapping` | `CodeExecutorPort` → песочница; `run(context) -> dict` (BR-004) |
+| `custom_code` | исполняет пользовательский Python-блок как чистую функцию — **запланировано, вне v1** | `code_id`/версия, `input_mapping`, `output_mapping` | `CodeExecutorPort` → песочница; `run(context) -> dict` (BR-004). Порт объявлен (`src/application/ports/code_executor.py`), движок и песочница не реализованы; `ENGINE_V1_CAPABILITIES` блок исключает — публикация отклоняется по BR-006 |
 
 ## Кнопки (`Button`)
 

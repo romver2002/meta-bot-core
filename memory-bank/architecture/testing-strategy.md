@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.1"
-updated: 2026-07-11
+version: "1.2"
+updated: 2026-07-12
 verified_commit: ""
 owner: ""
 ---
@@ -21,7 +21,7 @@ domain/application как быстрые тесты без I/O, infrastructure �
 | Уровень | Слой | Что проверяем | Изоляция |
 |---|---|---|---|
 | unit | domain | инварианты `Bot`, `Flow`, `Node`, `Session` и бизнес-правила BR-001..BR-007 ([../domain/business-rules.md](../domain/business-rules.md)): публикуемость `Bot` (BR-001), HTTPS-URL и привязка `MiniApp` к боту (BR-003), валидация `Flow` по `CapabilityMatrix` (BR-006) | без инфраструктуры вообще — домен не знает о ней по построению |
-| unit | application | сценарии use case: `RunFlowUseCase`, `ProcessUpdateUseCase`, `PublishBotUseCase`, `CreateBotUseCase` — ветвления, классы ошибок, порядок вызовов портов | порты (`BotPlatformPort`, `FlowRepository`, `SessionRepository`, `TokenVaultPort`, `CodeExecutorPort`) подменяются in-memory фейками |
+| unit | application | сценарии use case: `ProcessUpdateUseCase`, `PublishBotUseCase`, `CreateBotUseCase` — ветвления, классы ошибок, порядок вызовов портов | порты (`BotPlatformPort`, `FlowRepository`, `SessionRepository`, `TokenVaultPort`, `CodeExecutorPort`) подменяются in-memory фейками |
 | integration | infrastructure | репозитории (`FlowRepository`, `SessionRepository`) против реальной БД/Redis; адаптеры `TelegramBotAdapter`/`MaxBotAdapter` против фейкового HTTP; `CodeExecutorPort` — изоляция и таймаут песочницы (BR-004); `mini_app_auth` — валидация init data (BR-007) | реальные Postgres 16 / Redis 7 через testcontainers; внешний HTTP платформ — фейковый сервер, реальные токены не используются |
 | e2e | весь стек | критические пути: приём вебхука → ответ бота; публикация бота (BR-001); открытие mini app с валидацией init data (BR-007) | окружение, близкое к prod |
 

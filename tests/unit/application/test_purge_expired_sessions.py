@@ -27,9 +27,7 @@ class _SpyRetention:
 
 async def test_cutoffs_follow_policy_and_report_counts() -> None:
     spy = _SpyRetention()
-    use_case = PurgeExpiredSessionsUseCase(
-        spy, idle_ttl_seconds=3600, retention_seconds=30 * 86400
-    )
+    use_case = PurgeExpiredSessionsUseCase(spy, idle_ttl_seconds=3600, retention_seconds=30 * 86400)
     now = datetime.datetime(2026, 7, 10, 12, 0, tzinfo=datetime.UTC)
 
     report = await use_case.execute(now)

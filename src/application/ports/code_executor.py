@@ -3,7 +3,7 @@
 BR-004: Python-блок исполняется как чистая функция ``run(context) -> dict``
 в песочнице (таймаут 1–3 с, лимиты памяти/ответа, без доступа к ФС, env,
 токенам, БД; сеть — только по whitelist). ``context`` не содержит токенов
-и соединений. Реализация — infrastructure/code_executor/ (ADR-0003).
+и соединений. Реализация появится в infrastructure/code_executor/ (ADR-0003, запланировано).
 """
 
 from __future__ import annotations

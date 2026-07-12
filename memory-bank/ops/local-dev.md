@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.4"
-updated: 2026-07-11
+version: "1.5"
+updated: 2026-07-12
 verified_commit: ""
 owner: ""
 ---
@@ -23,14 +23,22 @@ owner: ""
       Python 3.14 uv поставит сам по `.python-version` — отдельная установка не нужна.
 - [ ] Lock-файл — `uv.lock` (решение 2026-07-08); зависимости ставятся `uv sync`,
       команды запускаются `uv run X`.
+- [ ] **Node.js 24 LTS + npm** — только для `frontend/miniapp/`; точные версии
+      TypeScript/Vite/Vitest зафиксированы в его `package-lock.json`.
 - [ ] Docker Desktop + `docker compose` — для локальных PostgreSQL 16 и Redis 7
       (Docker Desktop ≥ 4.30). Проверка: `docker compose version`.
 - [ ] `src/` в `PYTHONPATH` (корневые пакеты слоёв — `domain`/`application`/
       `infrastructure`/`presentation`); задаётся менеджером зависимостей либо
       `export PYTHONPATH=src`.
-- [ ] Доступ к git-репозиторию meta-bot-core. Token vault и реальные токены ботов
-      для локального прогона **не нужны** — секреты в базу знаний и в код не кладём
-      ([../architecture/security.md](../architecture/security.md)).
+- [ ] Доступ к git-репозиторию meta-bot-core. Реальные токены ботов для голого
+      подъёма **не нужны** — секреты в базу знаний и в код не кладём
+      ([../architecture/security.md](../architecture/security.md)). Локальный
+      контур использует файловый dev-vault `.secrets/` в корне проекта
+      (`token-vault.json`, `connections.json`, `notification-targets.json`;
+      реализации `FileTokenVault`, `FileConnectionSecrets`,
+      `FileNotificationTargets`, сборка — `src/main.py`): каталог в `.gitignore`,
+      compose монтирует `./.secrets:/app/.secrets`. При работе с живыми ботами
+      там лежат **реальные токены** — не коммитить и не логировать.
 - [ ] (Опционально) туннель для приёма вебхуков: `ngrok` или `cloudflared` —
       см. раздел «Приём вебхуков локально».
 
@@ -79,6 +87,22 @@ uv run alembic upgrade head        # Postgres проброшен на localhost:
 uv run uvicorn main:app --reload --port 8000
 ```
 
+## Mini App runtime локально
+
+В отдельной консоли после запуска API:
+
+```bash
+cd frontend/miniapp
+npm ci
+npm run dev
+```
+
+Vite поднимается на `http://127.0.0.1:5174` и проксирует `/api` на backend.
+Открой `/?bot_id=<uuid>`: в обычном браузере это preview без поддельной
+авторизации. Для реального Telegram/MAX запуска URL должен быть HTTPS; задай
+`VITE_API_BASE_URL` на этапе сборки и добавь origin статики в
+`CORS_ALLOWED_ORIGINS` ([configuration.md](configuration.md)).
+
 ## Приём вебхуков локально
 
 В production обновления принимаются **только через webhook**
@@ -93,8 +117,9 @@ uv run uvicorn main:app --reload --port 8000
   uvicorn через `ngrok`/`cloudflared`, затем регистрация webhook у платформы на
   `https://<tunnel>/webhooks/telegram/{bot_id}`. Telegram принимает webhook только
   на портах 443/80/88/8443 — туннель по умолчанию отдаёт 443, что подходит.
-  Для MAX запросы идут на `platform-api2.max.ru` (миграция с `platform-api.max.ru`
-  до 19.07.2026), токен — в заголовке `Authorization`, не в query.
+  Для MAX запросы идут на `platform-api2.max.ru` (greenfield, старый хост
+  `platform-api.max.ru` не использовался), токен — в заголовке `Authorization`,
+  не в query.
 
 Регистрация webhook и отправка сообщений живым ботам — это **реальные вызовы Bot
 API** Telegram/MAX: закрыты флагом `policy_external_api_calls` (`ask`) в
@@ -114,6 +139,8 @@ PYTHONPATH=src uv run lint-imports          # границы слоёв (import-
 uv run ruff format src tests migrations && uv run ruff check src tests migrations
 uv run mypy                                 # типизация, режим strict
 uv run pytest -m unit                       # быстрые unit-тесты (domain + application)
+npm --prefix frontend/miniapp test           # unit-тесты platform bridge и API-клиента
+npm --prefix frontend/miniapp run build      # typecheck + production build + gzip budget
 python scripts/validate_memory_bank.py      # валидность базы знаний (если правил memory-bank)
 ```
 
@@ -150,7 +177,8 @@ python scripts/clean.py --dry-run  # показать, что удалит, ни
 - [ ] Healthcheck отвечает: `GET /healthchecks/` → 200 (сервис/версия/uptime);
       `GET /healthchecks/services/` → статусы Postgres и Redis.
 - [ ] Сквозной путь MVP: вебхук `POST /webhooks/telegram/{bot_id}` принимается и
-      порождает `IncomingEvent`; сценарий на `/start` отдаёт ответ (`SendMessageUseCase`).
+      порождает `IncomingEvent`; сценарий на `/start` отдаёт ответ
+      (`ProcessUpdateUseCase` → `BotPlatformPort.send_message`).
 - [ ] Проверки проходят локально: `uv run pytest -m unit`
       (уровни — [../architecture/testing-strategy.md](../architecture/testing-strategy.md)).
 - [ ] В логах при старте нет ERROR (куда смотреть — [observability.md](observability.md)).
@@ -165,7 +193,7 @@ python scripts/clean.py --dry-run  # показать, что удалит, ни
 | `ModuleNotFoundError: domain/application/...` | `src/` не в `PYTHONPATH` | `export PYTHONPATH=src` или запуск через `uv run` (editable-установка) |
 | Порт 5432 занят другим Postgres | На машине уже работает чужой Postgres | Наш проброшен на `localhost:5433` (compose), менять ничего не нужно |
 | Telegram: webhook не регистрируется / бот не отвечает через туннель | Публичный порт не 443/80/88/8443, либо активен long polling (`getUpdates` конфликтует с webhook) | Использовать туннель на 443; отключить long polling, оставить один режим |
-| MAX: 401/404 на запросах Bot API | Обращение к старому `platform-api.max.ru` или токен в query | Перевести на `platform-api2.max.ru`, токен — в заголовке `Authorization` |
+| MAX: 401/404 на запросах Bot API | Токен передан в query вместо заголовка, либо base_url вручную переопределён на старый `platform-api.max.ru` | Токен — в заголовке `Authorization`; хост — `platform-api2.max.ru` (дефолт адаптера, не переопределять) |
 | `lint-imports` красный после правки `src/` | Протечка слоя (импорт наружу / между платформами) | Чинить разворотом зависимости за порт, не глушить линтер ([../../.claude/rules/clean-architecture.md](../../.claude/rules/clean-architecture.md)) |
 
 ## Правила

@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-06
+version: "1.1"
+updated: 2026-07-12
 verified_commit: ""
 owner: ""
 ---
@@ -60,13 +60,13 @@ owner: ""
    включённый webhook отключает `getUpdates`, в prod приём только через webhook —
    ADR [0004](../../decisions/0004-webhook-platform-integration.md)). MAX — запросы
    на `platform-api2.max.ru`, токен в заголовке `Authorization`, не в query.
-4. Runtime-состояние: Redis 7 доступен (FSM-состояние `Session` и ключи
-   идемпотентности); token vault отдаёт валидный `Token` для `bot_id`;
-   PostgreSQL 16 доступен (сценарии `Flow`). Секреты при этом не выводим в вывод команд.
+4. Runtime-состояние: Redis 7 доступен (ключи идемпотентности вебхуков);
+   token vault отдаёт валидный `Token` для `bot_id`; PostgreSQL 16 доступен
+   (сценарии `Flow` и FSM-состояние `Session`). Секреты при этом не выводим в вывод команд.
 5. Песочница: если симптом на узлах `custom_code` — смотрим метрики `CodeExecutorPort`
    (таймаут/лимит памяти/размер ответа), BR-004 ([../../domain/business-rules.md](../../domain/business-rules.md)).
 6. Развилка: если вебхук не доходит/отключён у платформы → «Устранение», вариант 1;
-   если доходит, но `ProcessUpdateUseCase`/`RunFlowUseCase` падает → вариант 2;
+   если доходит, но `ProcessUpdateUseCase` падает → вариант 2;
    если недоступен Redis/PostgreSQL/token vault → вариант 3; иначе → «Эскалация».
 
 ## Устранение

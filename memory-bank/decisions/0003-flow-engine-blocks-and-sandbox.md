@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-06
+version: "1.1"
+updated: 2026-07-12
 verified_commit: ""
 owner: ""
 decision_status: proposed
@@ -36,7 +36,7 @@ decision_status: proposed
 - Сценарий — это **граф**: `Flow` из узлов (`Node`) и переходов, с входными
   триггерами (`Trigger`). Узел — не картинка, а данные (`send_message`,
   `show_buttons`, `ask`, `condition`, `open_mini_app`, `save`, `http_request`,
-  `custom_code`). Движок (`RunFlowUseCase`) исполняет граф; состояние пользователя —
+  `custom_code`). Движок (`ProcessUpdateUseCase`) исполняет граф; состояние пользователя —
   `Session` (FSM). Термины и инварианты — [../domain/glossary.md](../domain/glossary.md),
   [../domain/domain-model.md](../domain/domain-model.md).
 - **Python-блок = чистая функция** `run(context: dict) -> dict`. Он получает вход,

@@ -36,3 +36,6 @@ coverage.xml
 htmlcov/
 # файлы логов локальной разработки (ADR-0013)
 logs/
+
+# Дампы PG (pg-backup, compose): содержат ПДн сессий
+backups/

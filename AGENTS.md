@@ -11,7 +11,8 @@
   адаптеры, **а не «универсальный бот»**: ядро не знает, что такое Telegram или MAX.
   Зачем и для кого — [memory-bank/product/vision.md](memory-bank/product/vision.md).
 - **Стек**: Python 3.14 (async, uv), FastAPI (presentation), PostgreSQL 16 + SQLAlchemy 2
-  (хранилище сценариев/сессий), Redis 7 (FSM-состояние, идемпотентность вебхуков),
+  (хранилище сценариев/сессий), Redis 7 (идемпотентность вебхуков; hot-FSM
+  Session — план, ADR-0008),
   изолированный executor для пользовательских Python-блоков, TypeScript mini app
   (отдельный web-продукт). Реестр — [memory-bank/architecture/tech-stack.md](memory-bank/architecture/tech-stack.md).
 - **Архитектура**: Clean Architecture / SOLID, **строгий режим** — границы слоёв

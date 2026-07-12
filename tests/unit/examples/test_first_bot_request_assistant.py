@@ -40,7 +40,10 @@ pytestmark = pytest.mark.unit
 BOT_ID, USER, CHAT = "first-bot", "u1", "c1"
 ADMIN_CHAT, DEV_CHAT = "admin-chat-1", "dev-chat-1"
 API_KEY = "sk-test-KEY"
-DEFINITION_PATH = Path(__file__).resolve().parents[3] / "examples" / "first-bot-request-assistant" / "flow.definition.json"
+CRM_KEY = "crm-test-KEY"
+DEFINITION_PATH = (
+    Path(__file__).resolve().parents[3] / "examples" / "first-bot-request-assistant" / "flow.definition.json"
+)
 
 
 def _load_flow() -> Flow:
@@ -88,7 +91,7 @@ async def _engine(*, http_client: HttpClientPort | None = None):
         token_vault=vault,
         platform_factory=StubPlatformFactory(platform_port),
         http_client=http_client or _openrouter_ok("ответ"),
-        secrets=StubSecretResolver({"openrouter_api_key": API_KEY}),
+        secrets=StubSecretResolver({"openrouter_api_key": API_KEY, "crm_api_key": CRM_KEY}),
         notifications=StubNotificationTargets({"admin": ADMIN_CHAT, "developer": DEV_CHAT}),
     )
     return use_case, platform_port
@@ -118,7 +121,7 @@ def test_example_flow_valid_for_publication() -> None:
     flow = _load_flow()
     # Не бросает: блоки/триггеры/кнопки в матрице v1, достижимость и детерминизм — ок.
     flow.validate_for_publication(ENGINE_V1_CAPABILITIES)
-    assert len(flow.nodes) == 42
+    assert len(flow.nodes) == 44
 
 
 def test_no_pii_collection_path_bypasses_consent() -> None:
@@ -127,15 +130,10 @@ def test_no_pii_collection_path_bypasses_consent() -> None:
     pii_entry_nodes = {"req_ask_name", "dev_ask_message"}
     trigger_targets = {t.target_node_id for t in flow.triggers}
     assert trigger_targets & pii_entry_nodes == set()  # ни один триггер не ведёт в сбор ПДн
-    consent_holders = {
-        node.id for node in flow.nodes.values()
-        for b in node.buttons if b.target in pii_entry_nodes
-    }
+    consent_holders = {node.id for node in flow.nodes.values() for b in node.buttons if b.target in pii_entry_nodes}
     # Кнопки в сбор ПДн — только с экранов согласия и пост-согласийных экранов правки.
     assert consent_holders <= {"req_start", "req_summary", "dev_start", "dev_confirm"}
-    transition_sources = {
-        t.source_node_id for t in flow.transitions if t.target_node_id in pii_entry_nodes
-    }
+    transition_sources = {t.source_node_id for t in flow.transitions if t.target_node_id in pii_entry_nodes}
     assert transition_sources == set()  # и безусловных переходов в сбор ПДн нет
 
 
@@ -251,6 +249,49 @@ async def test_request_form_collects_and_confirms() -> None:
     # дубль заявки админу не уходит.
     await use_case.execute(_click("req_notify"))
     assert len([c for c in port.sent if c.external_chat_id == ADMIN_CHAT]) == 1
+
+
+async def _fill_request_form(use_case: ProcessUpdateUseCase) -> None:
+    await use_case.execute(_event(TriggerType.START))
+    await use_case.execute(_click("req_start"))
+    await use_case.execute(_click("req_ask_name"))  # «✅ Согласен — продолжить»
+    for answer in ("Иван", "+70000000000", "Нужен бот-помощник", "2 недели", "не определён"):
+        await use_case.execute(_event(TriggerType.TEXT, text=answer))
+
+
+async def test_request_confirm_exports_lead_to_crm_before_wipe() -> None:
+    # Этап 0 CRM: подтверждённая заявка уходит http_request'ом ДО wipe-узлов.
+    http = StubHttpClient()
+    use_case, port = await _engine(http_client=http)
+
+    await _fill_request_form(use_case)
+    await use_case.execute(_click("req_notify"))
+
+    (call,) = [c for c in http.calls if c["url"] == "https://example.invalid/crm/leads"]
+    assert call["method"] == "POST"
+    assert call["headers"]["Authorization"] == f"Bearer {CRM_KEY}"  # секрет подключения подставлен
+    body = call["json_body"]
+    assert body["name"] == "Иван"  # интерполяция случилась до стирания переменных
+    assert body["contact"] == "+70000000000"
+    # Сбоя не было — ⚠️-уведомление админу не отправлялось (только карточка заявки).
+    assert len([c for c in port.sent if c.external_chat_id == ADMIN_CHAT]) == 1
+
+
+async def test_request_crm_failure_notifies_admin_user_path_intact() -> None:
+    # Сбой CRM — best-effort: админ получает ⚠️ с данными, пользователь — «Готово».
+    failing = StubHttpClient(HttpResponse(status_code=500, json={}, text=""))
+    use_case, port = await _engine(http_client=failing)
+
+    await _fill_request_form(use_case)
+    await use_case.execute(_click("req_notify"))
+
+    admin_messages = [c for c in port.sent if c.external_chat_id == ADMIN_CHAT]
+    assert len(admin_messages) == 2  # карточка заявки + ⚠️ о сбое выгрузки
+    assert "не выгружена в CRM" in admin_messages[1].text
+    assert "Иван" in admin_messages[1].text  # переменные ещё живы в момент уведомления
+    done = port.sent[-1]
+    assert done.external_chat_id == CHAT
+    assert "Готово" in done.text  # пользовательский путь сбоем CRM не ломается
 
 
 async def test_developer_contact_delivers_message() -> None:

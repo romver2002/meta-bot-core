@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-06
+version: "1.1"
+updated: 2026-07-12
 verified_commit: ""
 owner: ""
 ---
@@ -40,7 +40,7 @@ owner: ""
   (`FlowRepository`/`SessionRepository`), идемпотентность вебхука (Redis),
   песочница `CodeExecutorPort`, token vault.
 - **Use case** (`application/`) — неверная оркестровка (`ProcessUpdateUseCase`,
-  `RunFlowUseCase`, `SendMessageUseCase`, `PublishBotUseCase`…), порядок вызовов
+  `PublishBotUseCase`, `CreateBotUseCase`…), порядок вызовов
   портов, обработка ошибок.
 - **Домен** (`domain/`) — неверный инвариант `Flow`/`Bot`/`Node` или бизнес-правило.
   Сверь с [../domain/business-rules.md](../domain/business-rules.md): баг в коде

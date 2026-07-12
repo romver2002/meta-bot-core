@@ -18,6 +18,7 @@ from application.ports.bot_platform import (
     DeleteMessageCommand,
     EditMessageCommand,
     MiniAppIdentity,
+    RegisterWebhookCommand,
     SendMessageCommand,
 )
 from domain.capabilities import CapabilityMatrix
@@ -114,6 +115,31 @@ class TelegramBotAdapter:
             _raise_scrubbed("Telegram API недоступен для проверки токена", exc)
         return response.status_code == httpx.codes.OK and bool(response.json().get("ok"))
 
+    async def register_webhook(self, command: RegisterWebhookCommand) -> None:
+        """setWebhook: перезаписывает подписку идемпотентно (specs/002, «Установка webhook»).
+
+        ``allowed_updates`` не сужаем: неподдерживаемые типы parse_update
+        игнорирует, а сужение пришлось бы синхронизировать с движком (ADR-0014).
+        """
+        body: dict[str, Any] = {"url": command.url}
+        if command.secret:
+            body["secret_token"] = command.secret
+        try:
+            response = await self._client.post(f"{self._base_url}/bot{command.bot_token}/setWebhook", json=body)
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            _raise_scrubbed("Telegram setWebhook не принят", exc)
+        try:
+            payload = response.json()
+        except ValueError:
+            # 2xx с не-JSON телом (страница туннеля/прокси): контракт порта —
+            # только ApplicationError, сырой JSONDecodeError наружу не выпускаем.
+            raise ApplicationError("Telegram setWebhook вернул не-JSON ответ") from None
+        if not isinstance(payload, dict) or not bool(payload.get("ok")):
+            # description платформы не содержит токена; url — не секрет.
+            description = payload.get("description") if isinstance(payload, dict) else None
+            raise ApplicationError(f"Telegram setWebhook отклонён: {description or 'ok=false'}")
+
     async def send_message(self, command: SendMessageCommand) -> None:
         body: dict[str, Any] = {"chat_id": command.external_chat_id, "text": command.text}
         keyboard = _keyboard(command.buttons)
@@ -142,9 +168,7 @@ class TelegramBotAdapter:
         if keyboard is not None:
             body["reply_markup"] = keyboard
         try:
-            response = await self._client.post(
-                f"{self._base_url}/bot{command.bot_token}/editMessageText", json=body
-            )
+            response = await self._client.post(f"{self._base_url}/bot{command.bot_token}/editMessageText", json=body)
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             if _is_not_modified(exc.response):
@@ -160,9 +184,7 @@ class TelegramBotAdapter:
             "message_id": _message_id_as_int(command.message_id),
         }
         try:
-            response = await self._client.post(
-                f"{self._base_url}/bot{command.bot_token}/deleteMessage", json=body
-            )
+            response = await self._client.post(f"{self._base_url}/bot{command.bot_token}/deleteMessage", json=body)
             response.raise_for_status()
         except httpx.HTTPError as exc:
             _raise_scrubbed(f"Telegram deleteMessage отклонён (chat={command.external_chat_id})", exc)

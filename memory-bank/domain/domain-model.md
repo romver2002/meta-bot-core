@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.1"
-updated: 2026-07-07
+version: "1.2"
+updated: 2026-07-12
 verified_commit: ""
 owner: ""
 ---
@@ -31,7 +31,7 @@ Telegram или MAX. Три корня агрегата: **Bot**, **Flow**, **Se
 | Token | Value object в агрегате Bot | Секрет платформенного бота, связывающий его с конструктором | Секрет живёт только в token vault; в БД и логах — не в открытом виде; валидность проверяется при публикации (BR-001) | `src/domain/bot/value_objects.py::Token` |
 | MiniApp | Внутри агрегата Bot | Web-приложение, привязанное к боту, запускается из кнопки | URL — только HTTPS; в MAX не существует без чат-бота (BR-003); init data валидируется на backend до доверия пользователю (BR-007) | `src/domain/bot/entities.py::MiniApp` |
 | Flow | Корень агрегата | Сценарий = граф `Node` + переходов + `Trigger`; описывает поведение бота | ≥1 входной `Trigger`; каждый переход ведёт в существующий `Node`; каждый `Node` достижим от `Trigger`; нет висячих переходов; блоки допустимы на платформе бота (BR-006) | `src/domain/flow/entities.py::Flow` |
-| Node | Внутри агрегата Flow | Шаг сценария: `send_message` \| `show_buttons` \| `ask` \| `condition` \| `open_mini_app` \| `save` \| `http_request` \| `custom_code` (спецификация каждого — [flow-blocks.md](flow-blocks.md)) | Тип доступен на платформе(ах) бота по `CapabilityMatrix` (BR-006); переходы — только к существующим `Node` того же `Flow` | `src/domain/flow/entities.py::Node` |
+| Node | Внутри агрегата Flow | Шаг сценария: `send_message` \| `show_buttons` \| `ask` \| `condition` \| `open_mini_app` \| `save` \| `http_request` \| `notify` \| `custom_code` (спецификация каждого — [flow-blocks.md](flow-blocks.md)) | Тип доступен на платформе(ах) бота по `CapabilityMatrix` (BR-006); переходы — только к существующим `Node` того же `Flow` | `src/domain/flow/entities.py::Node` |
 | Trigger | Внутри агрегата Flow | Вход в сценарий/ветку: `/start` \| `text` \| `callback` \| `mini_app_result` | У `Flow` есть хотя бы один входной `Trigger` (условие публикации, BR-001) | `src/domain/flow/entities.py::Trigger` |
 | Button | Внутри агрегата Flow (у `Node`) | Единая модель кнопки: подпись + действие `open_mini_app` \| `callback` \| `url` \| `next` | Действие ссылается на существующий `Node` / `MiniApp` / HTTPS-URL; в платформенное представление превращает адаптер, не домен | `src/domain/flow/entities.py::Button` |
 | Session | Корень агрегата | FSM-состояние пользователя: текущий шаг сценария + его переменные | Ровно одна активная `Session` на пару (`Bot`, пользователь); ссылки на `Bot`/`Flow` — по идентификатору | `src/domain/session/entities.py::Session` |

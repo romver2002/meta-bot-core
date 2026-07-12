@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-06
+version: "1.1"
+updated: 2026-07-12
 verified_commit: ""
 owner: ""
 ---
@@ -74,8 +74,8 @@ owner: ""
 
 | Метрика | Определение | Где смотреть |
 |---|---|---|
-| p95 времени обработки вебхука | 95-й перцентиль времени от приёма update в `webhook_routes` до ответа платформе (`ProcessUpdateUseCase` → `RunFlowUseCase` → `SendMessageUseCase`), за 5 мин | Grafana, панель «Webhook» |
-| Доля ошибок исполнения сценариев | доля исполнений `Flow` (`RunFlowUseCase`/`ExecuteNodeUseCase`), завершившихся необработанной ошибкой, от всех исполнений, за час | Grafana + алерт |
+| p95 времени обработки вебхука | 95-й перцентиль времени от приёма update в `webhook_routes` до ответа платформе (`ProcessUpdateUseCase`, включая отправку через `BotPlatformPort.send_message`), за 5 мин | Grafana, панель «Webhook» |
+| Доля ошибок исполнения сценариев | доля исполнений `Flow` (`ProcessUpdateUseCase`), завершившихся необработанной ошибкой, от всех исполнений, за час | Grafana + алерт |
 | Доля успешной валидации init data mini app | доля запусков mini app (`MiniAppOpened`), прошедших валидацию init data на backend (BR-007), от всех попыток | Grafana, панель «Mini App» |
 
 Что считаем успехом и почему:

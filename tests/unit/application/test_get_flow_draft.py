@@ -18,9 +18,7 @@ async def test_returns_canonical_definition_and_row_version() -> None:
     bots, flows = InMemoryBotRepository(), InMemoryFlowRepository()
     await bots.save(make_bot("bot-1"))
     definition = flow_to_definition(make_flow("editor-flow"))
-    saved = await SaveFlowDraftUseCase(bots, flows).execute(
-        "bot-1", definition, expected_row_version=None
-    )
+    saved = await SaveFlowDraftUseCase(bots, flows).execute("bot-1", definition, expected_row_version=None)
 
     draft = await GetFlowDraftUseCase(bots, flows).execute("bot-1")
 

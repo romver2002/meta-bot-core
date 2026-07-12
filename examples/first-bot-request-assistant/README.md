@@ -8,11 +8,13 @@
 
 ## Что внутри Flow
 
-42 узла: каркас (приветствие, меню-хаб, «Что умею», «Услуги», «Частые вопросы»),
+44 узла: каркас (приветствие, меню-хаб, «Что умею», «Услуги», «Частые вопросы»),
 живой AI-ответ через OpenRouter, форма заявки с доставкой админу (блок `notify`,
-ADR-0010), связь с разработчиком с доставкой, подсказка на свободный текст и
-guard-триггеры «протухших» кнопок (клик по старой карточке без данных в сессии
-перезапускает форму, а не шлёт пустую заявку). Форма отвечает кнопками-вариантами
+ADR-0010) и **выгрузкой подтверждённой заявки во внешнюю CRM** (`req_crm`,
+блок `http_request` ДО wipe-узлов; сбой выгрузки шлёт админу ⚠️-уведомление
+и не ломает путь пользователя), связь с разработчиком с доставкой, подсказка
+на свободный текст и guard-триггеры «протухших» кнопок (клик по старой карточке
+без данных в сессии перезапускает форму, а не шлёт пустую заявку). Форма отвечает кнопками-вариантами
 (услуга, срок; вилки бюджета — из прайс-листа и зависят от выбранной услуги),
 своё значение всегда можно вбить текстом. Контракт
 документа — [src/domain/flow/codec.py](../../src/domain/flow/codec.py). Проверка
@@ -64,6 +66,16 @@ curl -sX PUT http://127.0.0.1:8000/api/bots/<BOT_ID>/notifications/admin \
 curl -sX PUT http://127.0.0.1:8000/api/bots/<BOT_ID>/notifications/developer \
   -H 'Content-Type: application/json' -d '{"chat_id":"<DEV_CHAT_ID>"}'
 
+# 3b. CRM (этап 0, «без потери»): замени url узла req_crm в flow.definition.json
+#     на вебхук своей CRM/таблицы (amoCRM/Bitrix24/Sheets-webhook) и засей ключ → 204.
+#     Не подключаешь CRM — удали узлы req_crm/req_crm_fail ВМЕСТЕ с их переходами
+#     (req_notify→req_crm, req_crm→req_wipe_done/req_crm_fail, req_crm_fail→req_wipe_done)
+#     и верни переход req_notify→req_wipe_done, иначе висячие переходы дадут 422 на
+#     шаге 4. Оставишь узлы — на каждую заявку админ получит ⚠️ «не выгружена в CRM»
+#     (осознанная страховка от молчаливой потери, а не баг).
+curl -sX PUT http://127.0.0.1:8000/api/bots/<BOT_ID>/connections/crm_api_key \
+  -H 'Content-Type: application/json' -d '{"value":"<CRM_API_KEY>"}'
+
 # 4. Сохранить сценарий (оборачиваем definition; UTF-8 обязателен для кириллицы)
 jq '{definition: ., name: "Умный помощник по заявкам"}' flow.definition.json \
   | curl -sX PUT http://127.0.0.1:8000/api/bots/<BOT_ID>/flow \
@@ -72,10 +84,9 @@ jq '{definition: ., name: "Умный помощник по заявкам"}' fl
 # 5. Опубликовать  → verify_token дергает Telegram getMe (РЕАЛЬНЫЙ вызов) + BR-006
 curl -sX POST http://127.0.0.1:8000/api/bots/<BOT_ID>/publish
 
-# 6. Публичный URL вебхука через туннель (ngrok/cloudflared) и setWebhook (РЕАЛЬНЫЙ вызов):
-#    URL вебхука = https://<public-host>/webhooks/telegram/<BOT_ID>
-#    secret_token = значение WEBHOOK_SECRET (если задан) — Telegram вернёт его
-#    в заголовке X-Telegram-Bot-Api-Secret-Token, вебхук-роут его проверяет.
+# 6. Вебхук. Если задан WEBHOOK_BASE_URL (публичный HTTPS-хост/туннель) — шаг НЕ нужен:
+#    publish на шаге 5 сам зарегистрировал /webhooks/telegram/<BOT_ID> у платформы
+#    с secret_token = WEBHOOK_SECRET (ADR-0014). Без переменной — вручную:
 curl -s "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook?url=https://<public-host>/webhooks/telegram/<BOT_ID>&secret_token=<WEBHOOK_SECRET>"
 
 # 7. Живой смоук: /start в Telegram → приветствие + меню → «Задать вопрос» → живой ответ.
@@ -91,6 +102,11 @@ curl -s "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook?url=https://<public-
   (получатель заблокировал бота, роль не привязана) уведомление тихо теряется,
   а пользователь всё равно видит «принято». Гарантированная доставка (outbox +
   ретраи) и онбординг-захват chat_id (`/register_admin`) — следующий этап.
+- **Выгрузка в CRM — этап 0, тоже best-effort.** `req_crm` отправляет
+  подтверждённую заявку во внешнюю CRM синхронно и без ретраев; при сбое
+  админ получает ⚠️ с данными заявки (error-ветка), но durable-повтора нет —
+  недоступная CRM в момент подтверждения полагается на карточку в чате админа.
+  Outbox закрывает это следующим этапом вместе с notify.
 - **Хэндофф к человеку — кнопками, не по полю `status`.** Движок пока не умеет
   двухуровневый разбор JSON-ответа и `contains`/`and`/`or` в `condition`; поэтому
   AI просят отвечать плоским текстом, а под каждым ответом — кнопки

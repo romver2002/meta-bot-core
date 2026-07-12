@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-06
+version: "1.1"
+updated: 2026-07-12
 verified_commit: ""
 owner: ""
 ---
@@ -12,10 +12,11 @@ owner: ""
 Как код попадает из dev в prod — [releases.md](releases.md);
 переменные и секреты по окружениям — [configuration.md](configuration.md).
 
-Главное отличие окружений meta-bot-core — **как бот получает обновления от
-платформы**: local/dev принимают апдейты через long polling или временный
-HTTPS-туннель (режим отладки), stage/prod — только через webhook на постоянном
-публичном HTTPS (ADR [0004-webhook-platform-integration](../decisions/0004-webhook-platform-integration.md)).
+Главное отличие окружений meta-bot-core — **откуда приходит webhook**: приём
+обновлений везде только через webhook (long polling в коде не реализован),
+local/dev получают его через временный HTTPS-туннель к локальному роуту,
+stage/prod — на постоянном публичном HTTPS
+(ADR [0004-webhook-platform-integration](../decisions/0004-webhook-platform-integration.md)).
 
 ## Реестр окружений
 
@@ -24,32 +25,36 @@ HTTPS-туннель (режим отладки), stage/prod — только ч
 
 | Окружение | URL / хост | Назначение | Чем отличается от prod | Кто имеет доступ |
 |---|---|---|---|---|
-| local | localhost (см. [local-dev.md](local-dev.md)) | разработка и отладка сценариев | всё в контейнерах; PostgreSQL 16 / Redis 7 локально; приём апдейтов — long polling или туннель; только тестовые боты и токены | каждый разработчик |
-| dev | `https://dev.meta-bot-core.internal` (уточнить у команды) | интеграция веток, автодеплой из main | урезанные ресурсы; приём апдейтов допускает long polling/туннель для отладки; тестовые боты; dev-инстансы PostgreSQL/Redis | вся команда |
+| local | localhost (см. [local-dev.md](local-dev.md)) | разработка и отладка сценариев | всё в контейнерах; PostgreSQL 16 / Redis 7 локально; приём апдейтов — webhook через временный туннель; только тестовые боты и токены | каждый разработчик |
+| dev | `https://dev.meta-bot-core.internal` (уточнить у команды) | интеграция веток, автодеплой из main | урезанные ресурсы; приём апдейтов — webhook через туннель/временный HTTPS; тестовые боты; dev-инстансы PostgreSQL/Redis | вся команда |
 | stage | `https://stage.meta-bot-core.example` (уточнить у команды) | приёмка и регресс перед релизом (репетиция prod) | webhook на публичном HTTPS; конфигурация ≈ prod; данные обезличены; отдельные stage-боты и stage-токены | команда + QA |
 | prod | `https://api.meta-bot-core.example` (уточнить у команды) | боевое: живые боты и пользователи | — | деплой — только CI/CD; ручной доступ — read-only (кто именно — уточнить у команды) |
 
 ## Ключевые отличия окружений
 
-### Приём обновлений (polling vs webhook)
+### Приём обновлений (webhook)
 
-- **local/dev** — long polling (`getUpdates`) или временный HTTPS-туннель к
-  локальному webhook-роуту; удобно для отладки без публичного адреса.
-- **stage/prod** — только webhook: `/webhooks/telegram/{bot_id}` и
-  `/webhooks/max/{bot_id}` (ProcessUpdateUseCase → IncomingEvent). Требуется
-  **постоянный публичный HTTPS**; идемпотентность вебхуков обеспечивает Redis.
+- Приём — **только webhook**: `/webhooks/telegram/{bot_id}` и
+  `/webhooks/max/{bot_id}` (webhook_routes → IncomingEvent → ProcessUpdateUseCase);
+  идемпотентность вебхуков обеспечивает Redis. Long polling (`getUpdates`)
+  в коде не реализован (ADR-0004: в production он запрещён в любом случае).
+- **local/dev** — тот же webhook, но через временный HTTPS-туннель к локальному
+  роуту; удобно для отладки без публичного адреса ([local-dev.md](local-dev.md)).
+- **stage/prod** — webhook на **постоянном публичном HTTPS**.
 - Telegram: webhook работает только на портах **443/80/88/8443**; включённый
   webhook отключает `getUpdates` — на одном боте одновременно один способ приёма.
-- Long polling в production запрещён (ADR-0004) — это механизм локальной отладки.
 
 ### Хосты платформ
 
 - **Telegram** — Bot API `api.telegram.org` (одинаково на всех окружениях).
-- **MAX** — до **19 июля 2026** все запросы перевести с `platform-api.max.ru`
-  на `platform-api2.max.ru`; токен передаётся в заголовке `Authorization`
-  (не в query). Проверь актуальный хост в конфигурации окружения перед релизом.
-- Значения хостов и портов — переменные окружения из [configuration.md](configuration.md),
-  не хардкод; различия между окружениями держатся там.
+- **MAX** — Bot API `platform-api2.max.ru` (одинаково на всех окружениях):
+  проект greenfield и с самого начала работает на новом хосте (решение
+  2026-07-07), миграции со старого `platform-api.max.ru` нет — внешний дедлайн
+  платформы 2026-07-19 проект не затрагивает. Токен передаётся в заголовке
+  `Authorization` (не в query).
+- Базовые URL платформ сейчас — не переменные окружения, а дефолты конструкторов
+  адаптеров (`TelegramBotAdapter` / `MaxBotAdapter`); конфигурируемость через
+  env — план, см. реестр в [configuration.md](configuration.md).
 
 ### Боты, токены и доступы
 
@@ -60,6 +65,10 @@ HTTPS-туннель (режим отладки), stage/prod — только ч
   (правила — [../architecture/security.md](../architecture/security.md)).
 - stage/prod требуют публичного HTTPS не только для webhook, но и для mini app
   (URL mini app — всегда HTTPS, BR-003).
+- Если статика mini app и API на разных origin, на этапе сборки задаётся
+  `VITE_API_BASE_URL`, а origin статики вносится точной строкой в
+  `CORS_ALLOWED_ORIGINS`. CORS не заменяет IAM Admin API; wildcard и cookies
+  не используются.
 
 ## Правила по окружениям
 

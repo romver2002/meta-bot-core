@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.7"
-updated: 2026-07-11
+version: "1.8"
+updated: 2026-07-12
 verified_commit: ""
 owner: "teamlead"
 ---
@@ -73,6 +73,7 @@ owner: "teamlead"
 - [observability.md](ops/observability.md) — логи, метрики, алерты, где смотреть
 - [runbooks/](ops/runbooks/README.md) — инструкции по инцидентам
 - [runbooks/incident-template.md](ops/runbooks/incident-template.md) — шаблон ранбука
+- [runbooks/backup-restore.md](ops/runbooks/backup-restore.md) — восстановление БД из дампов `pg-backup`
 
 ### decisions/ — архитектурные решения (append-only)
 - [README.md](decisions/README.md) — реестр ADR и правила ведения
@@ -82,7 +83,7 @@ owner: "teamlead"
 - [0003-flow-engine-blocks-and-sandbox.md](decisions/0003-flow-engine-blocks-and-sandbox.md) — движок на блоках + изолированные Python-блоки (proposed)
 - [0004-webhook-platform-integration.md](decisions/0004-webhook-platform-integration.md) — приём обновлений через webhook (proposed)
 - [0005-capability-matrix.md](decisions/0005-capability-matrix.md) — матрица возможностей платформ (proposed)
-- [0006-mini-app-as-web-product.md](decisions/0006-mini-app-as-web-product.md) — mini app как отдельный web-продукт (proposed)
+- [0006-mini-app-as-web-product.md](decisions/0006-mini-app-as-web-product.md) — mini app как отдельный web-продукт (accepted)
 - [0007-visual-flow-editor.md](decisions/0007-visual-flow-editor.md) — визуальный редактор сценариев: React + React Flow (proposed)
 - [0008-persistence-model.md](decisions/0008-persistence-model.md) — модель хранения: версии Flow в JSONB, Session в PG+Redis (proposed)
 - [0009-max-adapter-thin-client.md](decisions/0009-max-adapter-thin-client.md) — MaxBotAdapter: тонкий httpx-клиент вместо SDK maxapi (proposed)
@@ -90,6 +91,7 @@ owner: "teamlead"
 - [0011-session-pii-retention.md](decisions/0011-session-pii-retention.md) — ретеншен и стирание ПДн сессий (BR-008) (proposed)
 - [0012-message-edit-in-place.md](decisions/0012-message-edit-in-place.md) — обновление отправленных сообщений: edit-in-place ответа на нажатие (proposed)
 - [0013-structured-logging.md](decisions/0013-structured-logging.md) — структурное логирование и файлы ошибок (proposed)
+- [0014-auto-webhook-registration.md](decisions/0014-auto-webhook-registration.md) — автоматическая регистрация вебхука при публикации (proposed)
 
 ### workflows/ — процессы под тип задачи (стабильный)
 - [new-feature.md](workflows/new-feature.md) — процесс новой фичи (включая связку со spec-kit)

@@ -1,5 +1,5 @@
 # Контракт границ Clean Architecture для meta-bot-core (строгий режим).
-# Запуск: lint-imports  (до и после правки src/, в pre-commit и в CI-джобе arch-lint).
+# Запуск: lint-imports  (до и после правки src/ и в CI-джобе arch-lint).
 # Смысл слоёв и границ — memory-bank/architecture/overview.md.
 # Протокол исправления протечек — .claude/rules/clean-architecture.md.
 #

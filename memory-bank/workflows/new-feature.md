@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-06
+version: "1.1"
+updated: 2026-07-12
 verified_commit: ""
 owner: ""
 ---
@@ -74,13 +74,14 @@ infrastructure реализует порты.
    - Никакого `if platform == …` в домене — платформа сюда не проникает.
 2. **Use case (`src/application/`)** — сценарий и порты к внешнему миру. Опирайся на
    существующие use case канона: `CreateBotUseCase`, `PublishBotUseCase`,
-   `ProcessUpdateUseCase`, `RunFlowUseCase`, `SendMessageUseCase`, `OpenMiniAppUseCase`,
-   `ExecuteNodeUseCase`.
+   `ProcessUpdateUseCase` (исполнение цепочки узлов и отправка ответов через
+   `BotPlatformPort.send_message`), `AttachMiniAppUseCase`,
+   `AuthenticateMiniAppUseCase`, `SubmitMiniAppResultUseCase`.
    - Нужен новый порт или паттерн взаимодействия? **Сначала опиши его в
      [../architecture/patterns.md](../architecture/patterns.md)** (и в разделе портов
      глоссария), затем объяви как `Protocol` в `application/ports/`. Канонические порты:
      `BotPlatformPort`, `FlowRepository`, `SessionRepository`, `TokenVaultPort`,
-     `CodeExecutorPort`, `FileStoragePort`.
+     `CodeExecutorPort` (`FileStoragePort` — план, порта в коде пока нет).
    - Знания о конкретной БД/HTTP/SDK и ветвлений по платформе здесь быть не должно.
 3. **Адаптеры (`src/infrastructure/`)** — реализации портов: `platforms/telegram/`,
    `platforms/max/` за `BotPlatformPort`; `db/` (SQLAlchemy) для `FlowRepository`/

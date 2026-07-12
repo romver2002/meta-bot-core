@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.32"
-updated: 2026-07-11
+version: "1.39"
+updated: 2026-07-12
 verified_commit: ""
 owner: ""
 ---
@@ -17,68 +17,59 @@ owner: ""
 
 <!-- 1–3 пункта: что делаем сейчас и ПОЧЕМУ именно это (ссылка на roadmap/issue). -->
 
-- 2026-07-06 — заведён проект meta-bot-core из шаблона базы знаний: наполняем
-  `memory-bank/` реальным содержимым. Фундамент — строгая Clean Architecture
-  ([../architecture/overview.md](../architecture/overview.md)); границы слоёв держит
-  import-linter ([../../.importlinter](../../.importlinter)) в CI-джобе arch-lint
-  ([../../.github/workflows/arch-lint.yml](../../.github/workflows/arch-lint.yml)).
-- 2026-07-06 — заложены доменные знания конструктора сценариев ботов Telegram/MAX
-  (сущности, порты, бизнес-правила): [../domain/glossary.md](../domain/glossary.md),
-  [../domain/business-rules.md](../domain/business-rules.md).
+- Живой контур работает: два бота (Telegram/MAX) на одном мультитенантном движке,
+  первый сценарий «умный помощник по заявкам» в `examples/`; модель «бот = данные» —
+  [../architecture/deployment.md](../architecture/deployment.md).
+- Ближайшее в конструкторе — открытие существующего сценария (`getFlowDraft`).
+  Mini app runtime уже выделен в `frontend/miniapp/`: общий лёгкий TypeScript
+  shell + bridge Telegram/MAX/Browser, CORS и CI (ADR-0006 accepted); витрина и
+  корзина остаются отдельным следующим продуктовым этапом.
+- Фундамент неизменен: строгая Clean Architecture, границы слоёв держит
+  import-linter в CI ([../architecture/overview.md](../architecture/overview.md)).
 
 ## Последние решения и договорённости
 
 <!-- Список с датами, ~10 строк. Старше пары недель — в decisions/ или удалить. -->
 
-- 2026-07-06 — ADR-0001/0002 accepted (строгая CA; ядро + адаптеры); остальные ADR — proposed ([../decisions/README.md](../decisions/README.md)).
-- 2026-07-07 — интеграция MAX сразу на `platform-api2.max.ru` (старый хост не
-  используем); токен MAX — в заголовке `Authorization`; сертификат Минцифры в доверенные
-  ([../architecture/platform-reference.md](../architecture/platform-reference.md)).
-- 2026-07-08 — Вертикальный срез бэкенда по канону CA + хранение ADR-0008 (Pg-репозитории, optimistic lock, Alembic); стек по образцу sro-agent-core (решение Романа): Python 3.14, uv, ruff ALL, pytest 9, compose PG16+Redis7.
-- 2026-07-08 — Адверсариальный аудит (50 агентов, 40 фиксов: TOCTOU publish, идемпотентность, non-root Docker, CI 96%) и живой контур (адаптеры TG/MAX ADR-0009, webhook+Redis, Admin API, Flow Engine в composition root; e2e + живой смоук).
-- 2026-07-08 — Глубокое сравнение TG/MAX (рой 55 агентов): отчёт specs/002-platform-deep-dive; исправлены ключ идемпотентности MAX и 2 ошибки platform-reference.
-- 2026-07-08 — Mini app end-to-end: auth init data BR-007 (общее HMAC-ядро TG/MAX), блок open_mini_app, триггер mini_app_result, привязка к боту; живой смоук 200/401/401.
-- 2026-07-09 — первый бот 'умный помощник по заявкам' собран как Flow-данные (examples/), live-smoke пройден в Telegram (меню/навигация вживую); must-fix остаточной http_request-переменной (null-content → прошлый ответ) починен + регресс-тест
-- 2026-07-09 — Актуализирован frontend/constructor по текущему Flow Engine/API (Engine v1 catalog, trigger.config, http_request, панель «Боты и публикация», стартовый шаблон помощника) + UX-исправления по замечаниям (закрываемые панели, вкладки, drawer на узких экранах, автопоказ настроек); npm build зелёный.
-- 2026-07-10 — Блок `notify` (ADR-0010 proposed): доставка третьему лицу по символической роли через `NotificationTargetResolverPort` + `BotPlatformPort.send_message`, best-effort (сбой резолва/доставки не рвёт цепочку); `PUT /api/bots/{id}/notifications/{role}`; пример first-bot реально доставляет заявку админу/разработчику + catch-all подсказка. Рой-ревью 55 агентов: 2 must-fix починены (resolve вне try; мёртвые кнопки после детура → guard-триггеры), антиспуфинг карточки, атомарный JSON-store.
-- 2026-07-10 — `BotPlatformPort.answer_callback` + `IncomingEvent.callback_id`: движок best-effort подтверждает каждое нажатие до маршрутизации (гасит спиннер и у протухших кнопок); TG `answerCallbackQuery` (id в теле) / MAX `POST /answers` (id в query) — различия только в адаптерах; контракты закреплены MockTransport-тестами.
-- 2026-07-10 — **BR-008/ADR-0011 (ПДн по закону)**: стирание переменных при завершении/просрочке; фоновая чистка (`SessionRetentionPort`, наблюдаемый цикл в `infrastructure/maintenance`); согласие + save-узлы-стиратели в примере (отмена стирает ПДн, дубль заявки блокируется guard'ом); MAX-ключи идемпотентности хэшируются; критерий простоя — `last_event_at`. Рой: 38 агентов, 11 подтверждённых находок вложено (включая must-fix «Отменить не стирает ПДн»).
-- 2026-07-10 — Конструктор: адаптивные связи и рамка/Ctrl/⌘-выделение, групповое перемещение, безопасные Ctrl/⌘+C/V с очисткой внутреннего буфера, раздельным счётчиком узлов/связей и массовое удаление; FastAPI 422 нормализуется по полям, 404/409/5xx и offline дают безопасные сообщения, все проблемы публикации видны на схеме и подсвечивают узлы. Добавлены единая блокировка API-действий, Error Boundary и корректное поведение drawer-панелей на мобильных; `npm test` (11) и production build зелёные.
-- 2026-07-11 — Конструктор: на десктопе пользователь регулирует палитру, инспектор и JSON-панель Flow; размеры хранятся локально, поддержаны клавиатура и сброс, mobile drawer не менялся. Гейты: npm test 16, build, lint-imports 6/6, pytest 190 passed (5 skipped).
-- 2026-07-11 — ADR-0012 edit-in-place: порт edit/delete_message + адаптеры TG/MAX + движок (ответ на callback правит меню на месте, фолбэк — отправка+удаление); 190 unit зелёные, mypy strict 92 файла, 6/6 арх-контрактов; рой-проверка доков опровергла 4 утверждения чата, лимиты зафиксированы в platform-reference
-- 2026-07-11 — Read-контракт черновика (бэкенд): GET /api/bots/{id}/flow -> definition+row_version (204 — черновика нет, 404 — только «бота нет»); пустое name при сохранении не сбрасывает имя; не-UUID id -> 404 вместо 500; рой-ревью 10 агентов, 3 подтверждённых фикса вложено; 200 unit зелёные
-- 2026-07-11 — Синхронизирован memory-bank с mb-kit 5e840f8: восстановлены baseline-исправления инструментов, монотонный version bump, setup/hook, LF/UTF-8 и CI; инструкции адаптированы под uv; 86 self-tests зелёные.
-- 2026-07-11 — ADR-0013 структурное логирование (JSON+request_id, logs/errors.log, скраб токена httpx, единый 500), enum WebhookOutcome, deployment.md, размещение mini app в ADR-0006, политика актуальности стека; рой 49 агентов — 11 находок вложено; 218 unit, база 0/0; коммиты ea2d32e+95b6d95
+- 2026-07-06..08 — фундамент: ADR-0001/0002 accepted (строгая CA; ядро + адаптеры); вертикальный срез бэкенда ADR-0008/0009 (Pg + optimistic lock + Alembic, адаптеры TG/MAX, webhook + Redis, Admin API, Flow Engine); стек Python 3.14/uv/PG16+Redis7 по образцу sro-agent-core (решение Романа); MAX сразу на `platform-api2.max.ru`, токен в `Authorization`; гейт покрытия в CI ≥90% (domain/application).
+- 2026-07-08 — mini app end-to-end (бэкенд): auth init data BR-007 (общее HMAC-ядро TG/MAX), блок `open_mini_app`, триггер `mini_app_result`, привязка к боту; живой смоук 200/401/401.
+- 2026-07-09 — первый бот «умный помощник по заявкам» жив в Telegram (examples/, live-smoke); конструктор актуализирован под Engine v1 (catalog, `http_request`, панель «Боты и публикация»).
+- 2026-07-10 — блок `notify` (ADR-0010): доставка третьему лицу по роли за `NotificationTargetResolverPort`, best-effort; `answer_callback` гасит спиннер на TG/MAX; BR-008/ADR-0011 — ретеншен и стирание ПДн сессий (фоновая чистка, согласие в примере, хэш MAX-ключей идемпотентности).
+- 2026-07-10..11 — конструктор: рамка/Ctrl-выделение, копирование с очисткой буфера, массовое удаление, нормализация ошибок API (422 по полям, безопасные 404/409/5xx/offline), Error Boundary, настраиваемые панели; npm test 16 + build зелёные.
+- 2026-07-11 — ADR-0012 edit-in-place: ответ на callback правит меню на месте (порт edit/delete_message, адаптеры TG/MAX, фолбэк отправка+удаление); рой-проверка доков опровергла 4 утверждения чата — лимиты зафиксированы в platform-reference.
+- 2026-07-11 — read-контракт черновика: `GET /api/bots/{id}/flow` → definition+row_version; 204 — бот есть, черновика нет; 404 — только «бота нет»; не-UUID id → 404; пустое name не сбрасывает имя.
+- 2026-07-11 — синхронизация memory-bank с mb-kit 5e840f8 (монотонный bump, setup/hook, LF/UTF-8, CI); 86 self-tests зелёные.
+- 2026-07-11 — ADR-0013 структурное логирование (JSON+request_id, logs/errors.log, скраб токена, enum WebhookOutcome) + deployment.md + размещение mini app в ADR-0006; 218 unit; коммиты ea2d32e+95b6d95.
+- 2026-07-11 — демо-инцидент «/start молчит» разобран по errors.log (KeyError vault): `.secrets` переведён на хост-маунт, сертификат Минцифры vendored в ops/certs + Dockerfile; оба бота живые (b4a167e).
+- 2026-07-12 — Сценарий отдельной поставки клиенту (self-hosted) зафиксирован в architecture/deployment.md: тот же движок без форка, состав бандла, gap-лист (экспорт/импорт бота, публичный образ, инструкция); проверено утверждение 'везде print' — в src/tests 0 (ruff T201 в CI), print только в scripts/ CLI-утилитах
+- 2026-07-12 — Многоагентное ревью архитектуры БД и стратегии (72 агента, адверсариальная верификация): схема корректна, потолок не в БД (нет кэша definition, rate-limits платформ не реализованы); переносимость БД подтверждена (~1050 строк в одном слое infrastructure/db); топология — один мультитенантный сервис (deployment.md); mini app: backend готов end-to-end, фронта нет; CRM: «без потери» сегодня не выполняется — заявка эфемерна (session.variables стираются после best-effort notify). Код не менялся
+- 2026-07-12 — Аудит и синхронизация базы знаний с кодом (рой 72+20 агентов): 58 подтверждённых расхождений исправлены в 20 файлах — фантомные имена (RunFlowUseCase/SendMessageUseCase/ExecuteNodeUseCase/FileStoragePort -> реальные), статус custom_code/песочницы 'план' (BR-004, ADR-0003, security, tech-stack), реестр configuration.md + .env.example (7 недостающих переменных вкл. WEBHOOK_SECRET, 7 фантомных помечены планом), security.md приведён к факту (auth отсутствует), 6 контрактов importlinter, greenfield MAX вместо 'миграции', Redis=идемпотентность (FSM — план); нерешаемое без владельца — в progress.md 'Расхождения'
+- 2026-07-12 — ADR-0006 ратифицирован: `frontend/miniapp/` — framework-free TypeScript 7/Vite 8 runtime; bridge загружается лениво для Telegram/MAX, Browser остаётся безопасным preview; init data не хранится на клиенте, CORS — точный allowlist. 16 Vitest зелёные, initial bundle: JS 4.55 KiB gzip, CSS 2.15 KiB gzip.
+- 2026-07-12 — Пост-верификация синхронизации (рой 34 агента): 5 моих ошибок исправлены (WEBHOOK_BASE_URL план→реестр, §API→§Решение ADR-0008, счётчик тестов→устойчивая формулировка); закрыты пробелы индекса README (ADR-0014, backup-restore.md — их добавил параллельный контур mini app/webhook/CORS/backup). Дерево устаканилось: ruff зелёный, lint-imports 6/6, 241 unit. Коммит не делал — политика policy_commit: ask, явной команды не было
+- 2026-07-12 — ADR-0014: авто-регистрация вебхука при publish (WEBHOOK_BASE_URL, register_webhook в порту+адаптерах TG/MAX); CORS для mini app (CORS_ALLOWED_ORIGINS, канонизация origin, валидация WEBHOOK_SECRET); каркас frontend/miniapp (bridge TG/MAX/Browser); этап 0 CRM в first-bot (http_request до wipe + error-ветка); бэкапы PG (pg-backup + runbook). Рой-ревью 5 областей: 7 should-fix вложено, bot_id-находка отклонена (uuid.UUID нормализует). Гейты: 255 unit, mypy strict, ruff, lint-imports 6/6, miniapp build+vitest 16
 
 ## Следующие шаги
 
 <!-- Конкретные ближайшие действия, у каждого понятен результат. Не бэклог. -->
 
-- 2026-07-06 — вынести ADR-0003–0006 на решение команды; статус accepted/rejected
-  проставляет человек ([../_meta/governance.md](../_meta/governance.md)).
-- 2026-07-06 — начать MVP end-to-end: Admin UI → Webhook Gateway → Flow Engine →
-  Message Dispatcher → Mini App ([../product/roadmap.md](../product/roadmap.md)).
-- 2026-07-07 — `MaxBotAdapter` пишем сразу под `platform-api2.max.ru` (токен в
-  `Authorization`, не в query); старый хост не поддерживаем. Внешний дедлайн
-  платформы 2026-07-19 нас не блокирует — стартуем уже на v2.
+- 2026-07-12 — **закоммитить недостающую половину ea2d32e**: обработчик 502 в
+  `admin_routes.py` + `verify_token_error` в фейке лежат в рабочем дереве, а тест
+  `test_publish_when_platform_unreachable_is_502` уже в HEAD — чистый checkout
+  красный. Политика `policy_commit: ask` — нужна явная команда владельца.
 - 2026-07-08 — ADR-0007 вынести на ратификацию; при accepted — внести фронтенд-стек в architecture/tech-stack.md и описать контракт Admin API (CreateBot/PublishBot, обмен Flow).
-- 2026-07-10 — Не начинать отдельную Mini App-витрину/корзину: ближайший кейс —
-  `first-bot-request-assistant`, где Flow собирает заявку до подтверждения и
-  доставляет её админу; каталог, корзина и платежи остаются отложенными.
-- 2026-07-08 — Рендеринг исходящих сообщений (Message Dispatcher/адаптеры): использовать Templater/ (локальный референс, BigPixelLab) как источник дизайна декларативного описания сообщения (текст+клавиатуры+if/for+вложенные шаблоны); код НЕ вендорить — нет лицензии, eval() на данных, привязка к aiogram; писать нейтральную модель + рендер в адаптерах
-- 2026-07-11 — read-контракт черновика в Admin API готов: `GET /api/bots/{id}/flow`
-  → `{flow_id, name, definition, row_version}`; 204 — бот есть, черновика нет;
-  404 — бота нет. Осталась фронт-часть: подключить `getFlowDraft` в редактор
-  (открытие существующего сценария + восстановление layout из definition) —
-  до этого редактор намеренно не предлагает открыть чужой/старый сценарий.
+- 2026-07-08 — рендеринг исходящих сообщений: Templater/ — референс дизайна декларативного описания (текст+клавиатуры+if/for+вложенные шаблоны); код НЕ вендорить (нет лицензии, eval() на данных, привязка к aiogram); нейтральная модель + рендер в адаптерах.
+- 2026-07-12 — для первой витрины/формы определить предметный payload `mini_app_result`, экран и критерии бизнеса; runtime/bridge уже готовы, корзина и CRM-логика в каркас не вошли.
+- 2026-07-11 — фронт-часть read-контракта: подключить `getFlowDraft` в редактор (открытие существующего сценария + восстановление layout из definition) — до этого редактор намеренно не предлагает открыть чужой/старый сценарий.
+- 2026-07-12 — При первом запросе клиента на self-hosted закрыть gap-лист из deployment.md: экспорт/импорт бота, версионированный образ + compose-бандл в ops/, клиентская инструкция
 
 ## Открытые вопросы к команде
 
 <!-- Вопрос блокирует работу? Получен ответ → удалить, решение зафиксировать выше. -->
 
-- 2026-07-06 — менеджер зависимостей и lock-файл: poetry или uv? (уточнить у команды).
-- 2026-07-06 — хранилище секретов за `TokenVaultPort` (token vault) — какое? (уточнить у команды).
-- 2026-07-06 — пороги покрытия тестами в CI — какой минимум? (уточнить у команды).
+- 2026-07-06 — хранилище секретов за `TokenVaultPort` для прода — какое? (dev —
+  файлы `.secrets/` на хост-маунте; см. deployment.md «Чего не хватает до прода»).
+- 2026-07-06 — пороги покрытия тестами: в CI де-факто гейт ≥90% (domain/application),
+  командой не ратифицирован — подтвердить или изменить.
 
 ---
 

@@ -72,6 +72,20 @@ class AnswerCallbackCommand:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class RegisterWebhookCommand:
+    """Регистрация URL приёма обновлений у платформы (ADR-0014).
+
+    ``secret`` платформа возвращает в заголовке каждого вебхука
+    (X-Telegram-Bot-Api-Secret-Token / X-Max-Bot-Api-Secret) — вебхук-роут
+    сверяет его с ``WEBHOOK_SECRET``.
+    """
+
+    bot_token: str
+    url: str
+    secret: str | None = None
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class MiniAppIdentity:
     """Доверенная личность пользователя mini app после валидации init data (BR-007)."""
 
@@ -88,6 +102,18 @@ class BotPlatformPort(Protocol):
 
     async def verify_token(self, token: str) -> bool:
         """Проверяет токен у платформы (условие публикации, BR-001)."""
+        ...
+
+    async def register_webhook(self, command: RegisterWebhookCommand) -> None:
+        """Подписывает бота на доставку обновлений на ``command.url`` (ADR-0014).
+
+        Идемпотентно: повторная регистрация того же URL — успех
+        (TG setWebhook перезаписывает, у MAX ключ подписки — сам url).
+
+        :raises ApplicationError: платформа отклонила подписку или сетевой сбой;
+            публикация к этому моменту уже состоялась — ретрай publish
+            идемпотентен и повторит регистрацию.
+        """
         ...
 
     async def send_message(self, command: SendMessageCommand) -> None:

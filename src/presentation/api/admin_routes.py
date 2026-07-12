@@ -11,6 +11,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Path, Response, status
 
 from application.errors import (
+    ApplicationError,
     BotCreationError,
     BotNotFoundError,
     ConcurrencyError,
@@ -153,6 +154,12 @@ async def publish_bot(
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except (FlowValidationError, BotPublicationError) as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except ApplicationError as exc:
+        # 502, не 500: запрос клиента корректен, отказала платформа. Два случая
+        # (ADR-0014): verify_token недоступен — публикация НЕ состоялась; либо
+        # регистрация вебхука не прошла — бот УЖЕ опубликован, detail это поясняет
+        # и просит повторить (ретрай publish идемпотентен).
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     return PublishResponse(bot=BotResponse.from_domain(bot))
 
 

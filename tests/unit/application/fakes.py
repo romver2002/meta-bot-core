@@ -10,6 +10,7 @@ from application.ports.bot_platform import (
     DeleteMessageCommand,
     EditMessageCommand,
     MiniAppIdentity,
+    RegisterWebhookCommand,
     SendMessageCommand,
 )
 from application.ports.flow_repository import FlowDraft
@@ -141,8 +142,11 @@ class StubPlatform:
         self.answered: list[AnswerCallbackCommand] = []
         self.edited: list[EditMessageCommand] = []
         self.deleted: list[DeleteMessageCommand] = []
+        self.registered: list[RegisterWebhookCommand] = []
         self.edit_fails = False  # инъекция отказа платформы (лимит давности и т.п.)
         self.delete_fails = False
+        self.verify_token_error: Exception | None = None  # сеть/TLS до платформы упали
+        self.register_webhook_error: Exception | None = None  # платформа отклонила подписку
 
     def capabilities(self) -> CapabilityMatrix:
         return self._capabilities
@@ -155,7 +159,14 @@ class StubPlatform:
 
     async def verify_token(self, token: str) -> bool:
         self.verified_tokens.append(token)
+        if self.verify_token_error is not None:
+            raise self.verify_token_error
         return self._token_is_valid
+
+    async def register_webhook(self, command: RegisterWebhookCommand) -> None:
+        if self.register_webhook_error is not None:
+            raise self.register_webhook_error
+        self.registered.append(command)
 
     async def send_message(self, command: SendMessageCommand) -> None:
         self.sent.append(command)

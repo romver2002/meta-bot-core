@@ -60,3 +60,26 @@ jobs:
 
       - name: Интеграционные тесты (testcontainers, Postgres 16)
         run: uv run pytest -m integration
+
+  miniapp:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/miniapp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/miniapp/package-lock.json
+
+      - name: Установка Mini App (package-lock.json)
+        run: npm ci
+
+      - name: Тесты Mini App
+        run: npm test
+
+      - name: Сборка Mini App
+        run: npm run build

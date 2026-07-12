@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.3"
-updated: 2026-07-11
+version: "1.4"
+updated: 2026-07-12
 verified_commit: ""
 owner: ""
 ---
@@ -40,34 +40,60 @@ owner: ""
 
 | Переменная | Назначение | Где задаётся | Секрет? | Пример |
 |---|---|---|---|---|
-| `DATABASE_URL` | строка подключения к PostgreSQL 16 — хранилище `Bot`/`Flow`/`Session` (async SQLAlchemy) | local: `.env`; stage/prod: секрет-хранилище | **да** | `postgresql+asyncpg://meta_bot:***@localhost:5432/meta_bot` |
+| `DATABASE_URL` | строка подключения к PostgreSQL 16 — хранилище `Bot`/`Flow`/`Session` (async SQLAlchemy); compose пробрасывает Postgres на порт 5433 хоста | local: `.env`; stage/prod: секрет-хранилище | **да** | `postgresql+asyncpg://metabot:***@localhost:5433/metabot` |
 | `REDIS_URL` | подключение к Redis 7 — идемпотентность вебхуков (hot-FSM `Session` — план ADR-0008, пока в PG) | local: `.env`; stage/prod: секрет-хранилище | **да** (в prod содержит пароль) | `redis://localhost:6379/0` |
+| `WEBHOOK_SECRET` | секрет вебхуков: сверяется с заголовком `X-Telegram-Bot-Api-Secret-Token` / `X-Max-Bot-Api-Secret` (`presentation/api/webhook_routes.py`), при несовпадении — 403; дефолт `None` = проверка **отключена** — в prod обязателен | local: `.env`; stage/prod: секрет-хранилище | **да** | `<случайная строка>` |
+| `CORS_ALLOWED_ORIGINS` | точный JSON-массив origin'ов web-фронтендов, которым браузер разрешает `POST` к API (mini app auth/result); без путей и завершающего `/`, `*` запрещён; пустой массив отключает CORS | local: `.env`; stage/prod: переменные CI/CD | нет | `["https://mini.example.com"]` |
+| `VITE_API_BASE_URL` | origin backend для собранного `frontend/miniapp/`; пусто = same-origin `/api`, внешний origin должен быть HTTPS (кроме `localhost`/`127.0.0.1`) | frontend/miniapp/.env локально; stage/prod: env на этапе сборки статики | нет | `https://api.example.com` |
+| `WEBHOOK_BASE_URL` | публичный HTTPS-адрес приёма вебхуков; при заданном значении `publish` сам регистрирует `/webhooks/{platform}/{bot_id}` у платформы ([ADR-0014](../decisions/0014-auto-webhook-registration.md)), пусто — регистрация ручная (dev без туннеля); для Telegram допустимы порты 443/80/88/8443, для MAX — только 443 | local: `.env`; stage/prod: переменные CI/CD | нет | `https://api.example.com` |
+| `WEBHOOK_IDEMPOTENCY_TTL` | TTL (секунды) ключей идемпотентности вебхуков в Redis (`infrastructure/cache/redis_idempotency.py`) | local: `.env`; иначе: переменные CI/CD | нет | `86400` |
 | `SESSION_IDLE_TTL` | секунды без событий, после которых активная сессия просрочивается фоновой чисткой со стиранием переменных (BR-008) | local: `.env`; иначе: переменные CI/CD | нет | `3600` |
 | `SESSION_RETENTION_DAYS` | срок хранения завершённых/просроченных сессий; старше срока — строка удаляется целиком вместе с ПДн (BR-008, [ADR-0011](../decisions/0011-session-pii-retention.md)) | local: `.env`; иначе: переменные CI/CD | нет | `30` |
 | `SESSION_PURGE_INTERVAL` | интервал фоновой чистки сессий в секундах (composition root, lifespan) | local: `.env`; иначе: переменные CI/CD | нет | `3600` |
-| `ADMIN_API_SECRET` | секрет для подписи/проверки токенов доступа к admin API конструктора (`presentation/api/admin_routes.py`); механизм аутентификации (JWT/сессии) — уточнить у команды | local: `.env`; stage/prod: секрет-хранилище | **да** | `<случайная строка ≥ 32 байт>` |
-| `TOKEN_VAULT_URL` | адрес хранилища токенов ботов (token vault) за `TokenVaultPort`; имя условно, зависит от выбранного хранилища — уточнить у команды | local: `.env`; stage/prod: переменные CI/CD | нет | `https://vault.example.internal:8200` |
-| `TOKEN_VAULT_TOKEN` | учётные данные доступа приложения к token vault; имя условно — уточнить у команды | local: `.env`; stage/prod: секрет-хранилище | **да** | `<токен доступа к vault>` |
-| `MAX_API_BASE_URL` | базовый URL MAX platform-api; токен MAX передаётся адаптером в заголовке `Authorization`, **не** в query | local: `.env`; иначе: переменные CI/CD | нет | `https://platform-api2.max.ru` |
-| `TELEGRAM_API_BASE_URL` | базовый URL Telegram Bot API | local: `.env`; иначе: переменные CI/CD | нет | `https://api.telegram.org` |
-| `WEBHOOK_BASE_URL` | публичный HTTPS-адрес, на который платформы шлют вебхуки (`/webhooks/telegram/{bot_id}`, `/webhooks/max/{bot_id}`); для Telegram допустимы только порты 443/80/88/8443 | dev/stage/prod: переменные CI/CD | нет | `https://bots.example.com` |
-| `APP_ENV` | текущее окружение (`local`/`dev`/`stage`/`prod`) — влияет на дефолты и деградации | local: `.env`; иначе: переменные CI/CD | нет | `local` |
+| `TOKEN_VAULT_FILE` | путь к файловому dev-vault токенов ботов за `TokenVaultPort` (`infrastructure/security/file_token_vault.py`); **путь — не секрет, содержимое файла — секрет** (`.secrets/` в `.gitignore`); прод-хранилище — открытый вопрос | local: `.env` / дефолт в коде | нет | `.secrets/token-vault.json` |
+| `CONNECTION_SECRETS_FILE` | путь к файлу секретов подключений интеграций (`FileConnectionSecrets`); путь — не секрет, содержимое — секрет | local: `.env` / дефолт в коде | нет | `.secrets/connections.json` |
+| `NOTIFICATION_TARGETS_FILE` | путь к файлу привязок «роль → chat_id» для уведомлений (ADR-0010, `FileNotificationTargets`); путь — не секрет, содержимое (потенциальные ПДн) — секрет | local: `.env` / дефолт в коде | нет | `.secrets/notification-targets.json` |
+| `PROJECT_NAME` | имя сервиса — отдаётся healthcheck'ом, по нему ищется версия пакета (`GetHealthcheckUseCase`) | local: дефолт в коде | нет | `meta-bot-core` |
+| `PUBLIC_URL` | публичный URL сервиса (отдаётся healthcheck'ом) | local: дефолт в коде; stage/prod: переменные CI/CD | нет | `http://localhost:8000` |
 | `LOG_LEVEL` | уровень логирования (`DEBUG`/`INFO`/`WARNING`) | local: `.env`; иначе: переменные CI/CD | нет | `INFO` |
 | `LOG_DIR` | каталог файлов логов `app.log`/`errors.log` (ротация 5 МБ × 5); задаётся ТОЛЬКО локально (compose монтирует `./logs`), в проде пусто — только stdout ([ADR-0013](../decisions/0013-structured-logging.md)) | local: compose | нет | `logs` |
+| `BACKUP_INTERVAL` | период `pg_dump` сервиса `pg-backup` (compose, секунды); дампы в `./backups/` на хосте (каталог с ПДн сессий, в `.gitignore`), restore — [runbooks/backup-restore.md](runbooks/backup-restore.md) | local: `.env`/дефолт compose | нет | `86400` |
+| `BACKUP_KEEP_DAYS` | срок хранения дампов `pg-backup`: старше — удаляются ротацией | local: `.env`/дефолт compose | нет | `7` |
+
+### Планируемые переменные (кодом не читаются)
+
+Эти имена зарезервированы дизайном, но `Settings` (`src/infrastructure/config.py`)
+их **не читает** — задание их в `.env` ни на что не влияет. Требования сохраняем
+как план до реализации.
+
+| Переменная | Назначение (план) | Почему пока не в коде |
+|---|---|---|
+| `ADMIN_API_SECRET` | секрет для подписи/проверки токенов доступа к admin API конструктора (`presentation/api/admin_routes.py`) (**секрет**) | план — аутентификация admin API не реализована (открытый вопрос IAM) |
+| `TOKEN_VAULT_URL` | адрес внешнего хранилища токенов ботов (token vault) за `TokenVaultPort` | план — вместо внешнего vault работает файловый dev-vault (`TOKEN_VAULT_FILE`, см. реестр) |
+| `TOKEN_VAULT_TOKEN` | учётные данные доступа приложения к внешнему token vault (**секрет**) | план — см. `TOKEN_VAULT_URL` |
+| `MAX_API_BASE_URL` | базовый URL MAX platform-api; токен MAX передаётся адаптером в заголовке `Authorization`, **не** в query | план — сейчас URL это хардкод-дефолт конструктора `MaxBotAdapter` (`infrastructure/platforms/max/adapter.py`) |
+| `TELEGRAM_API_BASE_URL` | базовый URL Telegram Bot API | план — сейчас URL это хардкод-дефолт конструктора `TelegramBotAdapter` (`infrastructure/platforms/telegram/adapter.py`) |
+| `APP_ENV` | текущее окружение (`local`/`dev`/`stage`/`prod`) — влияет на дефолты и деградации | план — разделения окружений в `Settings` нет |
 
 ## Фиче-флаги и прочая конфигурация
 
 - Отдельной системы фиче-флагов пока нет — уточнить у команды по мере роста MVP
   ([../product/roadmap.md](../product/roadmap.md)).
-- **Платформенные базовые URL — конфигурируемы (см. реестр). ВАЖНО (MAX):**
-  проект greenfield — работаем **сразу на `platform-api2.max.ru`** (значение по
-  умолчанию `MAX_API_BASE_URL`); старый `platform-api.max.ru` **не используем**,
-  «миграции» у нас нет (решение 2026-07-07,
-  [current/active-context.md](../current/active-context.md)). На хостах, откуда
-  идут запросы, в доверенные добавляется **сертификат Минцифры**. Внешний дедлайн
-  платформы 2026-07-19 (когда старый хост отключат) нас не затрагивает — мы уже на v2.
-  Базовый URL — ответственность `MaxBotAdapter` (`infrastructure/platforms/max/`),
-  а не бизнес-логики; приём обновлений — через webhook (ADR
+- **Платформенные базовые URL** сейчас — параметры конструкторов адаптеров с
+  хардкод-дефолтами (`infrastructure/platforms/telegram/adapter.py`,
+  `infrastructure/platforms/max/adapter.py`); env-переменных для них нет,
+  конфигурируемость через env — план (см. «Планируемые переменные»).
+  **ВАЖНО (MAX):** проект greenfield — работаем **сразу на `platform-api2.max.ru`**
+  (дефолт конструктора `MaxBotAdapter`); старый `platform-api.max.ru`
+  **не используем**, «миграции» у нас нет (решение 2026-07-07,
+  [current/active-context.md](../current/active-context.md)). **Сертификат
+  Минцифры** vendored в `ops/certs/russian_trusted_root_ca.pem` и добавляется
+  в certifi при сборке образа (`Dockerfile`) — ручной настройки хостов не
+  требуется ([../architecture/deployment.md](../architecture/deployment.md)).
+  Внешний дедлайн платформы 2026-07-19 (когда старый хост отключат) нас не
+  затрагивает — мы уже на v2. Базовый URL — ответственность `MaxBotAdapter`
+  (`infrastructure/platforms/max/`), а не бизнес-логики; приём обновлений —
+  через webhook (ADR
   [0004-webhook-platform-integration](../decisions/0004-webhook-platform-integration.md)).
 - **Webhook-хост (`WEBHOOK_BASE_URL`) по платформам:** Telegram допускает порты
   443/80/88/8443; MAX — **только 443**, с сертификатом доверенного УЦ (self-signed
@@ -91,7 +117,7 @@ owner: ""
 ## Вопросы заполняющему
 
 - Все ли переменные из кода уже в таблице? Сверь grep-ом по коду
-  (например `grep -rn "os.environ" src/` / `grep -rn "getenv" src/` или по имени
-  конфиг-класса настроек — конкретный класс уточнить у команды).
+  (например `grep -rn "os.environ" src/` / `grep -rn "getenv" src/`) и с полями
+  конфиг-класса `Settings` (`src/infrastructure/config.py`, pydantic-settings).
 - Что произойдёт, если переменная не задана? Ответ должен быть предсказуемым
   (безопасный дефолт или явная ошибка при старте, без тихого запуска в проде).

@@ -18,6 +18,7 @@ from application.ports.bot_platform import (
     DeleteMessageCommand,
     EditMessageCommand,
     MiniAppIdentity,
+    RegisterWebhookCommand,
     SendMessageCommand,
 )
 from domain.capabilities import CapabilityMatrix
@@ -78,6 +79,23 @@ class MaxBotAdapter:
         except httpx.HTTPError as exc:
             raise ApplicationError("MAX API недоступен для проверки токена") from exc
         return response.status_code == httpx.codes.OK
+
+    async def register_webhook(self, command: RegisterWebhookCommand) -> None:
+        """POST /subscriptions {url, secret}: ключ подписки — сам url, id платформа
+        не отдаёт (specs/002, «Установка webhook» / «Ответ на подписку»); повторная
+        подписка того же url идемпотентна. Только 443 и доверенный сертификат.
+        """
+        body: dict[str, Any] = {"url": command.url}
+        if command.secret:
+            body["secret"] = command.secret
+        await self._simple_query(
+            "POST",
+            "/subscriptions",
+            command.bot_token,
+            params={},
+            json_body=body,
+            failure="MAX POST /subscriptions отклонён",
+        )
 
     async def send_message(self, command: SendMessageCommand) -> None:
         body: dict[str, Any] = {"text": command.text}

@@ -486,9 +486,7 @@ class _AckFailingPlatform(StubPlatform):
 async def test_ack_failure_does_not_break_scenario(caplog) -> None:
     import logging
 
-    use_case, port, _ = await _engine(
-        _flow(), platform_port=_AckFailingPlatform(full_capabilities())
-    )
+    use_case, port, _ = await _engine(_flow(), platform_port=_AckFailingPlatform(full_capabilities()))
     await use_case.execute(_event(TriggerType.TEXT, text="меню"))  # show_buttons «Куда дальше?»
 
     with caplog.at_level(logging.WARNING, logger="app.engine"):
@@ -651,9 +649,7 @@ class _FailingToChatPlatform(StubPlatform):
 
 
 async def test_notify_delivers_to_role_and_continues() -> None:
-    use_case, port, _ = await _engine(
-        _notify_flow(), notifications=StubNotificationTargets({"admin": "admin-chat"})
-    )
+    use_case, port, _ = await _engine(_notify_flow(), notifications=StubNotificationTargets({"admin": "admin-chat"}))
 
     await use_case.execute(_event(TriggerType.START))
 
@@ -732,9 +728,7 @@ async def test_notify_neutralizes_control_characters_in_variables() -> None:
             Transition(source_node_id="notify", target_node_id="done"),
         ),
     )
-    use_case, port, _ = await _engine(
-        ask_flow, notifications=StubNotificationTargets({"admin": "admin-chat"})
-    )
+    use_case, port, _ = await _engine(ask_flow, notifications=StubNotificationTargets({"admin": "admin-chat"}))
     await use_case.execute(_event(TriggerType.START))
 
     await use_case.execute(_event(TriggerType.TEXT, text="Иван\n📞 Контакт: fake\u202e"))
@@ -754,9 +748,7 @@ async def test_chain_of_exactly_max_steps_completes() -> None:
         name="Ровно лимит",
         nodes={nid: Node(id=nid, type=NodeType.SAVE, params={"key": nid, "value": "x"}) for nid in node_ids},
         triggers=(Trigger(id="t", type=TriggerType.START, target_node_id=node_ids[0]),),
-        transitions=tuple(
-            Transition(source_node_id=a, target_node_id=b) for a, b in itertools.pairwise(node_ids)
-        ),
+        transitions=tuple(Transition(source_node_id=a, target_node_id=b) for a, b in itertools.pairwise(node_ids)),
     )
     use_case, _, sessions = await _engine(linear_flow)
 

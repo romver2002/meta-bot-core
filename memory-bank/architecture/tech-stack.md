@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.2"
-updated: 2026-07-11
+version: "1.3"
+updated: 2026-07-12
 verified_commit: ""
 owner: ""
 ---
@@ -10,7 +10,8 @@ owner: ""
 
 Канонический реестр технологий meta-bot-core (Python 3.14 async · FastAPI ·
 PostgreSQL 16 + SQLAlchemy 2 · Redis 7 · изолированный executor песочницы ·
-TypeScript mini app; uv · ruff / mypy / import-linter; pytest; CI — GitHub Actions).
+TypeScript 7 + Vite 8 mini app; uv · ruff / mypy / import-linter; pytest/Vitest;
+CI — GitHub Actions).
 К какому слою относится технология — [overview.md](overview.md). Крупные выборы
 фиксируются через ADR — [../decisions/README.md](../decisions/README.md).
 
@@ -37,18 +38,26 @@ TypeScript mini app; uv · ruff / mypy / import-linter; pytest; CI — GitHub Ac
 |---|---|---|---|
 | Python | 3.14 | основной язык, единый async-рантайм backend (решение Романа 2026-07-08, равнение на sro-agent-core) | принята |
 | uv | — | менеджер зависимостей и версий Python; lock-файл `uv.lock`, `.python-version` | принята |
-| FastAPI | — | presentation: admin API конструктора + webhook-роуты | принята |
+| FastAPI | — | presentation: admin API конструктора + webhook-роуты; конфигурация — Pydantic `Settings` на pydantic-settings (`src/infrastructure/config.py`) | принята |
 | PostgreSQL | 16 | основное хранилище: `Bot`/`Flow`/`Session` (persistent) | принята |
-| SQLAlchemy (async) | 2.x | infrastructure: доступ к БД, реализация `FlowRepository`/`SessionRepository` | принята |
+| SQLAlchemy (async) | 2.x | infrastructure: доступ к БД (async-драйвер — asyncpg), реализация `FlowRepository`/`SessionRepository` | принята |
+| Alembic | — | infrastructure: миграции схемы PG (`alembic.ini` + `migrations/`), применяются на старте контейнера (`compose.yaml`) | испытываем¹ |
 | Redis | 7 | infrastructure: идемпотентность вебхуков; hot-FSM `Session` — запланирован ADR-0008, пока не реализован (сессии в PG) | принята |
+| httpx | — | infrastructure: HTTP-клиент за `HttpClientPort` (`src/infrastructure/http/`) | принята |
 | import-linter | — | контроль границ слоёв (`.importlinter`, команда `lint-imports`) | принята |
 | ruff | — | стиль: форматирование + линт | принята |
 | mypy | — | статическая типизация, режим strict | принята |
 | pytest | — | тесты (unit + интеграционные) | принята |
-| изолированный executor (sandbox) | — | infrastructure: исполнение `CustomCodeBlock` за `CodeExecutorPort` (отдельный воркер/контейнер) | испытываем |
-| TypeScript + mini app bridge | — | отдельный web-продукт: mini app runtime и platform bridge (Telegram/MAX) | принята |
+| изолированный executor (sandbox) | — | infrastructure: исполнение `CustomCodeBlock` за `CodeExecutorPort` (отдельный воркер/контейнер) — запланирован ADR-0003 (proposed), реализация не начата: существует только порт `CodeExecutorPort` | испытываем |
+| Node.js | 24 LTS | build/test runtime фронтендов; production mini app — статические файлы без Node.js | принята |
+| TypeScript | 7.x | строго типизированный mini app runtime и platform bridge | принята |
+| Vite | 8.x | dev-server и production-сборка `frontend/miniapp/`; assets для HTTPS/CDN | принята |
+| Vitest | 4.x | unit-тесты API-клиента, controller и bridge-адаптеров mini app | принята |
 | GitHub Actions | — | CI: джоба `arch-lint`, тесты, проверки | принята |
 | token vault | — | infrastructure: безопасное хранение `Token` за `TokenVaultPort` (конкретное хранилище — уточнить у команды) | принята |
+
+¹ Перевод Alembic в «принята» — при ратификации
+[ADR-0008](../decisions/0008-persistence-model.md).
 
 Слой каждой технологии — по таблице слоёв в [overview.md](overview.md);
 пересечение границ идёт только через порты application (см.
@@ -70,9 +79,11 @@ mini app — секреты**: живут только в token vault, не в �
 - Точные версии зависимостей фиксируются lock-файлом `uv.lock` (менеджер — uv;
   решение Романа 2026-07-08). Floor-версии (`>=`) — в `pyproject.toml`,
   точные пины держит lock.
+- Frontend mini app фиксирует точные версии в `frontend/miniapp/package-lock.json`
+  (npm); мажоры Node.js/TypeScript/Vite/Vitest закреплены в реестре выше.
 - Обновление мажорной версии — отдельный PR + обновление соответствующей строки реестра.
-- Уязвимости зависимостей отслеживаются в CI (разумный дефолт — `pip-audit`;
-  конкретный инструмент, dependabot / renovate / pip-audit, уточнить у команды).
+- Аудит уязвимостей зависимостей в CI пока не настроен; планируется
+  (кандидаты: `pip-audit` / dependabot — выбор за командой).
 
 ## Добавление новой зависимости
 

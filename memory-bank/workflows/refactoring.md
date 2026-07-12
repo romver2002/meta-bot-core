@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-06
+version: "1.1"
+updated: 2026-07-12
 verified_commit: ""
 owner: ""
 ---
@@ -99,7 +99,7 @@ owner: ""
 
 ## Пример
 
-Цель: `SendMessageUseCase` (application) содержит `if platform == "telegram"` при
+Цель: `ProcessUpdateUseCase` (application) содержит `if platform == "telegram"` при
 сборке кнопок — платформенная логика протекла в application (нарушение BR-005 и
 правила зависимостей; ловится `lint-imports` и ревью).
 Границы: `src/application/use_cases/`, `src/infrastructure/platforms/telegram|max/`;

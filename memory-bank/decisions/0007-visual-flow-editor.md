@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-08
+version: "1.1"
+updated: 2026-07-12
 verified_commit: ""
 owner: ""
 decision_status: proposed
@@ -41,7 +41,7 @@ decision_status: proposed
 
 - Визуальный редактор — **отдельный фронтенд-продукт** (не часть backend), стек
   **React 18 + Vite + React Flow (`@xyflow/react`)**. Расположение — `frontend/constructor/`
-  (рядом с будущим `frontend/mini-app/`, по аналогии с моделью «отдельный web-продукт»
+  (рядом с `frontend/miniapp/`, по аналогии с моделью «отдельный web-продукт»
   из [0006-mini-app-as-web-product.md](0006-mini-app-as-web-product.md)).
 - Редактор редактирует `Flow` как **данные**: узел на холсте = `{ type, params }`,
   ребро = переход. Сериализует граф в агрегат `Flow` и обменивается им с backend через

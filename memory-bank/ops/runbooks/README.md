@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-06
+version: "1.1"
+updated: 2026-07-12
 verified_commit: ""
 owner: ""
 ---
@@ -14,7 +14,7 @@ owner: ""
 
 Специфика проекта: meta-bot-core — движок исполняемых сценариев + платформенные
 адаптеры (Telegram, MAX). Отказы приходят с двух сторон — со стороны платформы
-(вебхук, токен, лимиты, миграция API MAX) и со стороны исполнения сценария
+(вебхук, токен, лимиты, хост API MAX) и со стороны исполнения сценария
 (FSM-состояние `Session`, песочница Python-блоков). Диагностика почти всегда
 начинается с вопроса «это платформа или наш flow?».
 
@@ -59,11 +59,12 @@ meta-bot-core. Файлов пока нет: каждый заводится и�
 
 | Ранбук | Симптом | Серьёзность | Обновлён |
 |---|---|---|---|
+| [backup-restore.md](backup-restore.md) | профилактика/восстановление: потеря данных PG, порча БД, переезд на новый хост — восстановление из дампов сервиса `pg-backup` | критично | 2026-07-12 |
 | `001-webhook-not-accepted.md` | вебхук не принимается / бот молчит: платформа не доставляет обновления на `/webhooks/telegram/{bot_id}` или `/webhooks/max/{bot_id}`, пользователь пишет — реакции нет | критично | — |
-| `002-max-integration-down.md` | интеграция MAX сломана: запросы к MAX API падают/таймаутят, MAX-боты молчат. Частый корень — незавершённая миграция с `platform-api.max.ru` на `platform-api2.max.ru` (дедлайн 19 июля 2026) или токен в query вместо заголовка `Authorization` | критично | — |
+| `002-max-integration-down.md` | интеграция MAX сломана: запросы к MAX API падают/таймаутят, MAX-боты молчат. Частый корень — токен в query вместо заголовка `Authorization` или вручную переопределённый base_url (дефолт адаптера — `platform-api2.max.ru`, старый `platform-api.max.ru` не используется — greenfield) | критично | — |
 | `003-bot-token-leaked.md` | утёк / скомпрометирован токен бота (засветился в логе, репозитории, скриншоте) — нужна ротация | критично | — |
-| `004-sandbox-block-hangs.md` | Python-блок (`CustomCodeBlock`) в песочнице зависает или жрёт ресурсы: воркер executor'а упирается в CPU/память, растёт очередь, `ExecuteNodeUseCase` таймаутит | деградация | — |
-| `005-session-state-desync.md` | рассинхрон состояния `Session`: пользователь застревает на шаге, повторяет шаг или получает ответ не на тот шаг — runtime-FSM в Redis разошёлся с ожидаемым | деградация | — |
+| `004-sandbox-block-hangs.md` | Python-блок (`CustomCodeBlock`) в песочнице зависает или жрёт ресурсы: воркер executor'а упирается в CPU/память, растёт очередь, исполнение узла в `ProcessUpdateUseCase` (`_run_chain`) таймаутит | деградация | — |
+| `005-session-state-desync.md` | рассинхрон состояния `Session`: пользователь застревает на шаге, повторяет шаг или получает ответ не на тот шаг — FSM-состояние в PostgreSQL разошлось с ожидаемым | деградация | — |
 
 Ориентиры для будущих авторов ранбуков (что именно проверять — детали в самих
 ранбуках, здесь только куда смотреть):
@@ -75,7 +76,7 @@ meta-bot-core. Файлов пока нет: каждый заводится и�
   доходит ли запрос до `webhook_routes`, строится ли `IncomingEvent`, не режет ли
   его идемпотентность в Redis. Конфигурация вебхуков — [../configuration.md](../configuration.md).
 - **002 / MAX.** Все запросы к MAX должны идти на `platform-api2.max.ru` с токеном
-  в заголовке `Authorization`; факты и дедлайн миграции —
+  в заголовке `Authorization` (greenfield — старый хост никогда не использовался); факты —
   [../../architecture/platform-reference.md](../../architecture/platform-reference.md).
   Отличать отказ платформы от исчерпания лимитов MAX (лимиты и модерация — на
   стороне платформы, BR-002, [../../domain/business-rules.md](../../domain/business-rules.md)).
@@ -86,8 +87,9 @@ meta-bot-core. Файлов пока нет: каждый заводится и�
   1–3 c, лимит памяти, изоляция от БД/токенов/ФС/env/сети (BR-004, ADR-0003,
   [../../decisions/0003-flow-engine-blocks-and-sandbox.md](../../decisions/0003-flow-engine-blocks-and-sandbox.md)).
   Симптом обычно значит нарушение лимитов или зависший воркер `CodeExecutorPort`.
-- **005 / Session.** Runtime-состояние FSM хранится в Redis по паре (`Bot`,
-  пользователь) через `SessionRepository`; определения — [../../domain/glossary.md](../../domain/glossary.md).
+- **005 / Session.** Runtime-состояние FSM хранится в PostgreSQL (`PgSessionRepository`)
+  по паре (`Bot`, пользователь) через `SessionRepository`; hot-FSM в Redis — план
+  (ADR-0008, proposed); определения — [../../domain/glossary.md](../../domain/glossary.md).
   Проверять целостность ключей, TTL и то, что не выполняется два обновления на одну
   сессию параллельно.
 

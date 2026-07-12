@@ -1,15 +1,16 @@
 ---
 status: active
-version: "1.1"
-updated: 2026-07-11
+version: "1.2"
+updated: 2026-07-12
 verified_commit: ""
 owner: ""
-decision_status: proposed
+decision_status: accepted
 ---
 
 # ADR-0006: Mini app как отдельный web-продукт с platform bridge
 
-> Черновик на ратификацию командой. `accepted` ставит владелец раздела.
+> Принято владельцем продукта 2026-07-12: начать с CORS и общего
+> `frontend/miniapp/` без витрины, корзины и CRM-логики.
 
 ## Контекст
 

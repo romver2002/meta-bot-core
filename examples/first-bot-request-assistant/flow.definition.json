@@ -307,7 +307,7 @@
       "id": "req_start",
       "type": "show_buttons",
       "params": {
-        "text": "Оформим заявку — задам несколько коротких вопросов.\n\n🔒 Для связи по заявке понадобятся ваши имя и контакт. Нажимая «Согласен», вы разрешаете их обработку для ответа на заявку; данные хранятся ограниченный срок и удаляются автоматически."
+        "text": "Оформим заявку — задам несколько коротких вопросов.\n\n🔒 Для связи по заявке понадобятся ваши имя и контакт. Нажимая «Согласен», вы разрешаете их обработку для ответа на заявку и сохранение подтверждённой заявки в CRM-системе владельца; данные диалога хранятся ограниченный срок и удаляются автоматически."
       },
       "buttons": [
         {
@@ -549,6 +549,37 @@
       "params": {
         "to": "admin",
         "text": "🆕 Новая заявка\n\n👤 Имя: {req_name}\n📞 Контакт: {req_contact}\n📌 Задача: {req_task}\n⏱ Срок: {req_deadline}\n💰 Бюджет: {req_budget}"
+      },
+      "buttons": []
+    },
+    {
+      "id": "req_crm",
+      "type": "http_request",
+      "params": {
+        "method": "POST",
+        "url": "https://example.invalid/crm/leads",
+        "headers": {
+          "Authorization": "Bearer {{secret:crm_api_key}}",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "name": "{req_name}",
+          "contact": "{req_contact}",
+          "task": "{req_task}",
+          "deadline": "{req_deadline}",
+          "budget": "{req_budget}",
+          "source": "first-bot-request-assistant"
+        },
+        "timeout": 10
+      },
+      "buttons": []
+    },
+    {
+      "id": "req_crm_fail",
+      "type": "notify",
+      "params": {
+        "to": "admin",
+        "text": "⚠️ Заявка от {req_name} ({req_contact}) не выгружена в CRM — продублируйте из карточки выше вручную."
       },
       "buttons": []
     },
@@ -925,6 +956,21 @@
     },
     {
       "source_node_id": "req_notify",
+      "target_node_id": "req_crm",
+      "on": "next"
+    },
+    {
+      "source_node_id": "req_crm",
+      "target_node_id": "req_wipe_done",
+      "on": "next"
+    },
+    {
+      "source_node_id": "req_crm",
+      "target_node_id": "req_crm_fail",
+      "on": "error"
+    },
+    {
+      "source_node_id": "req_crm_fail",
       "target_node_id": "req_wipe_done",
       "on": "next"
     },

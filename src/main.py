@@ -52,6 +52,7 @@ from infrastructure.security.file_token_vault import FileTokenVault
 from presentation.api.admin_routes import admin
 from presentation.api.health_routes import health
 from presentation.api.webhook_routes import webhooks
+from presentation.middleware.cors import add_cors_middleware
 from presentation.middleware.request_context import request_context_middleware
 from presentation.providers.admin import (
     get_attach_mini_app_uc,
@@ -138,6 +139,10 @@ def create_app() -> FastAPI:
     )
 
     app.middleware("http")(request_context_middleware)  # request_id + доступ-лог + единый 500
+    # CORS для браузерного mini app с внешнего хостинга (ADR-0006): только
+    # точные origin'ы из настроек (валидатор Settings запрещает wildcard);
+    # пусто — middleware не подключается вовсе (dev, same-origin).
+    add_cors_middleware(app, allowed_origins=settings.cors_allowed_origins)
     app.include_router(health, prefix="/healthchecks", tags=["Состояние"])
     app.include_router(admin, prefix="/api", tags=["Конструктор"])
     app.include_router(webhooks, prefix="/webhooks", tags=["Вебхуки"])
@@ -159,9 +164,7 @@ def create_app() -> FastAPI:
         ),
         get_attach_mini_app_uc: lambda: AttachMiniAppUseCase(bots=bots),
         get_set_connection_secret_uc: lambda: SetConnectionSecretUseCase(bots=bots, secrets=connection_secrets),
-        get_set_notification_target_uc: lambda: SetNotificationTargetUseCase(
-            bots=bots, targets=notification_targets
-        ),
+        get_set_notification_target_uc: lambda: SetNotificationTargetUseCase(bots=bots, targets=notification_targets),
         get_submit_mini_app_result_uc: lambda: SubmitMiniAppResultUseCase(
             bots=bots,
             token_vault=token_vault,
@@ -169,7 +172,18 @@ def create_app() -> FastAPI:
             process_update=process_update,
         ),
         get_publish_bot_uc: lambda: PublishBotUseCase(
-            bots=bots, flows=flows, token_vault=token_vault, platform_factory=platform_factory
+            bots=bots,
+            flows=flows,
+            token_vault=token_vault,
+            platform_factory=platform_factory,
+            # Форму пути вебхука знает composition root — он же монтирует роут
+            # /webhooks/{platform}/{bot_id} выше (ADR-0014).
+            webhook_url_template=(
+                settings.webhook_base_url.rstrip("/") + "/webhooks/{platform}/{bot_id}"
+                if settings.webhook_base_url
+                else None
+            ),
+            webhook_secret=settings.webhook_secret,
         ),
         get_platform_factory: lambda: platform_factory,
         get_idempotency: lambda: idempotency,

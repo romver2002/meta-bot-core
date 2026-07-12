@@ -159,9 +159,7 @@ class ProcessUpdateUseCase:
             # у бота на паузе/черновике: пауза и есть главный источник протухших
             # кнопок. Best-effort: подтверждение не важнее исполнения сценария.
             try:
-                await platform.answer_callback(
-                    AnswerCallbackCommand(bot_token=token, callback_id=event.callback_id)
-                )
+                await platform.answer_callback(AnswerCallbackCommand(bot_token=token, callback_id=event.callback_id))
             except ApplicationError:
                 logger.warning("Подтверждение нажатия не принято платформой", extra={"bot_id": bot.id})
 
@@ -236,9 +234,7 @@ class ProcessUpdateUseCase:
         if route is None:
             return  # нераспознанное событие — сценарий не трогаем
 
-        chain_ended = await self._run_chain(
-            flow, route.start_node_id, session, send, send_to, bot.id, mini_app_url
-        )
+        chain_ended = await self._run_chain(flow, route.start_node_id, session, send, send_to, bot.id, mini_app_url)
         if chain_ended:
             # Сценарий дошёл до конца: пара (Bot, user) свободна, следующий
             # триггер начнёт новую сессию на актуальной версии (ADR-0008).
@@ -395,9 +391,7 @@ class ProcessUpdateUseCase:
 
     # ── notify ───────────────────────────────────────────────────────────────
 
-    async def _execute_notify(
-        self, params: dict[str, object], session: Session, bot_id: str, send_to: _SendTo
-    ) -> None:
+    async def _execute_notify(self, params: dict[str, object], session: Session, bot_id: str, send_to: _SendTo) -> None:
         """Best-effort доставка третьему лицу (ADR-0010).
 
         Ничто здесь не важнее ответа пользователю: непривязанная роль, пустой

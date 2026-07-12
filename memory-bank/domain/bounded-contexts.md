@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-06
+version: "1.1"
+updated: 2026-07-12
 verified_commit: ""
 owner: ""
 ---
@@ -29,10 +29,10 @@ owner: ""
 | Контекст | Ответственность | Модуль в коде | Владелец |
 |---|---|---|---|
 | Constructor | Сборка и валидация сценария: `Bot`, `Flow`, `Node`, `Trigger`, `Button`, `MiniApp`; публикация бота (BR-001, BR-006). **Не исполняет** сценарий | `src/domain/`, `src/application/` | уточнить у команды |
-| FlowExecution | Исполнение сценария на входящих событиях: `IncomingEvent`, `Session`, FSM; `ProcessUpdateUseCase`, `RunFlowUseCase`, `ExecuteNodeUseCase`, `SendMessageUseCase` | `src/domain/`, `src/application/` | уточнить у команды |
+| FlowExecution | Исполнение сценария на входящих событиях: `IncomingEvent`, `Session`, FSM; `ProcessUpdateUseCase`, `SubmitMiniAppResultUseCase`, `PurgeExpiredSessionsUseCase` | `src/domain/`, `src/application/` | уточнить у команды |
 | PlatformIntegration | Адаптеры платформ (`TelegramBotAdapter`, `MaxBotAdapter`) + `CapabilityMatrix`: парсинг update → `IncomingEvent`, отправка команд, `PlatformFactory` | `src/infrastructure/platforms/` | уточнить у команды |
-| MiniApp | Web-runtime mini app: детект платформы, platform bridge, валидация init data (BR-007), возврат результата в backend | `mini-app/` | уточнить у команды |
-| CodeExecution | Песочница пользовательских Python-блоков (`CustomCodeBlock.run(context) -> dict`); изолирована (BR-004) | `src/infrastructure/code_executor/` | уточнить у команды |
+| MiniApp | Web-runtime mini app: детект платформы, platform bridge, валидация init data (BR-007), возврат результата в backend | `frontend/miniapp/` | уточнить у команды |
+| CodeExecution | Песочница пользовательских Python-блоков (`CustomCodeBlock.run(context) -> dict`); изолирована (BR-004) | `src/application/ports/code_executor.py` (порт); реализация `src/infrastructure/code_executor/` запланирована (ADR-0003) | уточнить у команды |
 | Admin (presentation) | UI/API конструктора: FastAPI-роуты создания бота, сценария, публикации; тонкий слой над use cases Constructor | `src/presentation/api/admin_routes.py` | уточнить у команды |
 
 Constructor и FlowExecution делят слои `domain`/`application`, но разведены по
@@ -49,8 +49,8 @@ case или порт. Неявных связей (прямой импорт ч�
 |---|---|---|---|
 | Admin → Constructor | Синхронный вызов use case | `CreateBotUseCase`, `PublishBotUseCase` | Платформа, ссылка на токен (в vault), граф сценария |
 | Constructor → FlowExecution | Общая читаемая модель (опубликованный сценарий) | `FlowRepository` (`src/application/ports/flow_repository.py`) | `Flow` = граф `Node` + переходов + `Trigger` + `Button` |
-| PlatformIntegration → FlowExecution | Синхронный вызов use case | `IncomingEvent` (`src/domain/bot/events.py`), `ProcessUpdateUseCase` | `platform`, `bot_id`, `external_user_id`, `external_chat_id`, `event_type`, `text?`, `payload?`, `raw?` |
-| FlowExecution → PlatformIntegration | Вызов порта | `BotPlatformPort` (`src/application/ports/bot_platform.py`) | Команды: `send_message`, `show_buttons`, ответ на callback, кнопка mini app |
+| PlatformIntegration → FlowExecution | Синхронный вызов use case | `IncomingEvent` (`src/domain/events.py`), `ProcessUpdateUseCase` | `platform`, `bot_id`, `external_user_id`, `external_chat_id`, `event_type`, `text?`, `payload?`, `update_id?`, `callback_id?`, `message_id?` |
+| FlowExecution → PlatformIntegration | Вызов порта | `BotPlatformPort` (`src/application/ports/bot_platform.py`) | Команды: `send_message` / `edit_message` / `delete_message` (edit-in-place, ADR-0012), `answer_callback`; кнопки (в т.ч. mini app, `ButtonAction.OPEN_MINI_APP`) — поле `buttons` команд send/edit |
 | FlowExecution → CodeExecution | Вызов порта | `CodeExecutorPort` (`src/application/ports/`) | `context: dict` → результат `run(context) -> dict` (в изоляции, BR-004) |
 | MiniApp → FlowExecution (backend) | HTTPS-запрос → доменное событие | `IncomingEvent` c `event_type = mini_app_result` | Провалидированные init data (BR-007) + payload результата mini app |
 

@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-06
+version: "1.1"
+updated: 2026-07-12
 verified_commit: ""
 owner: ""
 ---
@@ -25,6 +25,14 @@ init-данные mini app), изоляция пользовательских P
   Где секреты живут и как попадают в приложение —
   [../ops/configuration.md](../ops/configuration.md). Конкретное хранилище
   (Vault / SOPS / секреты CI) — уточнить у команды.
+- **Секреты подключений к внешним API** (ключи для `{{secret:*}}` в блоке
+  `http_request`) задаются endpoint'ом `PUT /api/bots/{bot_id}/connections/{name}`
+  (204; 404, если бота нет) и живут за портами `SecretResolverPort` /
+  `ConnectionSecretWriterPort` (`application/ports/connection_secrets.py`) —
+  в определение Flow и в БД значение не попадает. Dev-хранилище —
+  `.secrets/connections.json` (`FileConnectionSecrets`,
+  `infrastructure/security/`); прод-хранилище — тот же открытый вопрос,
+  что и у token vault.
 - **MAX: токен передаётся в заголовке `Authorization`, не в query-строке** —
   иначе он оседает в логах прокси и access-логах. Это ответственность
   `MaxBotAdapter` (`infrastructure/platforms/max/`), не бизнес-логики.
@@ -36,15 +44,26 @@ init-данные mini app), изоляция пользовательских P
 
 ## Аутентификация и авторизация
 
-- **Admin API конструктора** (`presentation/api/admin_routes.py`) закрыт
-  аутентификацией — механизм (JWT / сессии) уточнить у команды; реализуется как
-  middleware в presentation + сервис в infrastructure, не в бизнес-логике.
+- CORS для отдельного web-деплоя mini app — только точный allowlist из
+  `CORS_ALLOWED_ORIGINS`; wildcard `*` запрещён, credentials не разрешаются.
+  CORS ограничивает браузеры, но **не является аутентификацией** и не делает
+  открытый Admin API безопасным для production.
+
+- **Admin API конструктора** (`presentation/api/admin_routes.py`) должен быть
+  закрыт аутентификацией — механизм (IAM: JWT / сессии) — открытый вопрос.
+  **Сейчас не реализовано**: контур dev работает без auth, строго в доверенной
+  среде разработки (см. [deployment.md](deployment.md), «Чего не хватает до
+  прода», п. 1). Целевое размещение: middleware в presentation + сервис в
+  infrastructure, не в бизнес-логике.
 - **Webhook-роуты** (`presentation/api/webhook_routes.py`) не имеют пользовательской
   аутентификации — доверие к обновлению строится на валидации подписи/источника
   и идемпотентности (см. «Валидация входных данных на границах»), а не на логине.
-- Авторизация: право на операцию над ботом/сценарием проверяется как часть
-  сценария use case (application: `CreateBotUseCase`, `PublishBotUseCase` и др.),
-  а не только фильтром в UI или роутинге. Модель прав (владелец ресурса / RBAC) —
+- Авторизация — целевое правило размещения: право на операцию над ботом/сценарием
+  проверяется как часть сценария use case (application: `CreateBotUseCase`,
+  `PublishBotUseCase` и др.), а не только фильтром в UI или роутинге.
+  **Сейчас проверка прав не реализована, модели пользователя нет**: `actor_id`
+  в `PublishBotUseCase` — только audit-атрибут версии сценария, `owner_id` в БД —
+  зарезервированная nullable-колонка. Модель прав (владелец ресурса / RBAC) —
   уточнить у команды.
 
 ## Изоляция пользовательского кода (Python-блок)
@@ -54,8 +73,14 @@ init-данные mini app), изоляция пользовательских P
 контекст CodeExecution в [../domain/bounded-contexts.md](../domain/bounded-contexts.md)).
 `CustomCodeBlock` — это **чужой код** внутри нашего процесса-исполнителя, поэтому
 он исполняется как чистая функция `run(context) -> dict` в песочнице за портом
-`CodeExecutorPort` (реализация — `infrastructure/code_executor/`). Flow-движок
+`CodeExecutorPort` (`application/ports/code_executor.py`). Flow-движок
 не вызывает пользовательский код напрямую.
+
+Статус: порт `CodeExecutorPort` существует, но реализация
+`infrastructure/code_executor/` ещё не построена и не подключена в `src/main.py`;
+сценарии с `custom_code` сейчас отклоняются при публикации по BR-006 — узла нет
+в `ENGINE_V1_CAPABILITIES` (`infrastructure/platforms/capabilities_v1.py`).
+Требования ниже — нормативные для будущей реализации.
 
 Границы песочницы:
 
@@ -88,10 +113,11 @@ init-данные mini app), изоляция пользовательских P
   Telegram / данные MAX Bridge) **до доверия пользователю** — BR-007 (ADR
   [0006-mini-app-as-web-product](../decisions/0006-mini-app-as-web-product.md)).
   Реализация — `infrastructure/platforms/*/mini_app_auth.py` за портом; данные из
-  mini app без успешной проверки подписи не считаются достоверными. Точные алгоритмы
-  проверки (Telegram: `HMAC_SHA256` с ключом от `bot_token` + `WebAppData`, проверка
-  `auth_date`; MAX: `HMAC_SHA256` по отсортированным параметрам с ключом-токеном) —
-  [platform-reference.md](platform-reference.md).
+  mini app без успешной проверки подписи не считаются достоверными. Алгоритм у
+  Telegram и MAX **общий** (криптоядро — `infrastructure/platforms/webapp_signature.py`):
+  `secret_key = HMAC_SHA256(key="WebAppData", msg=bot_token)`, затем
+  `HMAC_SHA256(secret_key, data_check_string)` по отсортированным параметрам,
+  плюс проверка `auth_date`; детали — [platform-reference.md](platform-reference.md).
 - Инварианты домена дополнительно защищаются в domain: сущность (`Bot`, `Flow`,
   `MiniApp`) нельзя создать в невалидном состоянии (напр. HTTPS-URL для `MiniApp` —
   BR-003). Валидация на границе этого не отменяет.
@@ -121,7 +147,10 @@ init-данные mini app), изоляция пользовательских P
       память, запрет ФС/env/сети/БД/токенов, лимит ответа) — BR-004.
 - [ ] Новый платформенный вход валидируется на границе presentation; init data
       mini app проверяется по подписи до доверия — BR-007; запросы параметризованы.
-- [ ] Admin API endpoint'ы закрыты аутентификацией; права проверяются в use case.
+- [ ] Целевое (пока не реализовано, см. «Аутентификация и авторизация»):
+      Admin API endpoint'ы закрыты аутентификацией, права проверяются в use case.
+      Сейчас новый admin-endpoint расширяет неаутентифицированную dev-поверхность —
+      оценивай осознанно.
 - [ ] ПДн и токены не попадают в логи, метрики и тексты ошибок.
 - [ ] Новые зависимости проверены на уязвимости — инструмент (pip-audit /
       dependabot) уточнить у команды.

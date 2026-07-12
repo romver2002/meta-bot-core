@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-06
+version: "1.1"
+updated: 2026-07-12
 verified_commit: ""
 owner: ""
 ---
@@ -31,8 +31,8 @@ owner: ""
   `Platform` Telegram/MAX, добавить `Token`, собрать простой `Flow` с кнопками и
   ссылкой на mini app) → Webhook Gateway (`/webhooks/telegram/{bot_id}`,
   `/webhooks/max/{bot_id}` → `IncomingEvent`) → Flow Engine (`/start`, текст,
-  callback, состояние `Session`) → Message Dispatcher (`SendMessageUseCase` +
-  `TelegramBotAdapter`/`MaxBotAdapter`) → Mini App (детект платформы, валидация
+  callback, состояние `Session`) → Message Dispatcher (отправка через
+  `BotPlatformPort.send_message`: `TelegramBotAdapter`/`MaxBotAdapter`) → Mini App (детект платформы, валидация
   init data, возврат результата в backend). Зачем сейчас: пока формула
   Flow Engine + State Machine + Platform Adapters + Mini App Runtime не прошла
   сквозь один живой сценарий — продукта нет. Приём обновлений — через webhook
@@ -70,7 +70,7 @@ owner: ""
 | Приоритет | Обоснование |
 |---|---|
 | MVP-конструктор end-to-end | Первый приоритет по КАНОНУ: без сквозного прохода «создать бота → принять webhook → отработать сценарий → ответить → открыть mini app» продукта не существует. Метрики успеха — [metrics.md](metrics.md). |
-| Миграция MAX на `platform-api2.max.ru` | **Жёсткий внешний срок: до 2026-07-19** перевести запросы `MaxBotAdapter` с `platform-api.max.ru` на `platform-api2.max.ru`, токен передавать в заголовке `Authorization` (не в query). Это ops-обязательство, а не бизнес-правило; пропуск срока = отказ MAX-ботов. Поэтому MAX-адаптер MVP пишем сразу под новый endpoint. |
+| MAX на `platform-api2.max.ru` | **Внешний срок платформы: 2026-07-19 — выполнено с запасом.** Greenfield: `MaxBotAdapter` с самого начала работает на `platform-api2.max.ru`, токен — в заголовке `Authorization` (не в query); старый `platform-api.max.ru` не использовался, миграции не было. Риск «пропуск срока = отказ MAX-ботов» снят. |
 | Полная capability matrix | Снимает риск предложить в конструкторе блок, который платформа не исполнит; включает корректную блокировку при публикации (BR-006). Идёт сразу за MVP, где матрица — минимальная. |
 | Python-блоки в песочнице | Даёт расширяемость сценариев без правки ядра, но требует зрелого изолированного executor'а (BR-004); безопасность важнее скорости, поэтому после стабильного Flow Engine. |
 
@@ -91,5 +91,5 @@ owner: ""
 - [ ] «Квартал» не противоречит текущему фокусу в `current/active-context.md` и реальной работе команды.
 - [ ] Направления не противоречат [vision.md](vision.md) и анти-скоупу.
 - [ ] «Отложено» пересмотрено: условия возврата не наступили?
-- [ ] Срок миграции MAX на `platform-api2.max.ru` (до 2026-07-19) не просрочен и учтён в текущем спринте.
+- [ ] Требование MAX `platform-api2.max.ru` (срок платформы 2026-07-19) выполнено — адаптер на v2 с рождения; новые платформенные дедлайны заводить строкой в «Приоритеты».
 - [ ] Frontmatter обновлён по [../_meta/frontmatter.md](../_meta/frontmatter.md).

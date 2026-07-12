@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.1"
-updated: 2026-07-10
+version: "1.2"
+updated: 2026-07-12
 verified_commit: ""
 owner: ""
 ---
@@ -35,7 +35,7 @@ owner: ""
 | Триггер | Условие входа в сценарий/ветку: команда `/start`, текст, нажатие кнопки, результат mini app | `Trigger` | Constructor |
 | Кнопка | Единая модель кнопки: подпись + действие (открыть mini app, callback, ссылка, следующий шаг). В платформенное представление превращает адаптер | `Button` | Constructor |
 | Mini app | Web-приложение, привязанное к боту и запускаемое из кнопки. Автономно не существует (в MAX — только внутри чат-бота) | `MiniApp` | MiniApp |
-| Входящее событие | Единая, платформонезависимая модель события от пользователя: платформа, бот, пользователь, чат, тип, текст, payload, сырой update | `IncomingEvent` | FlowExecution |
+| Входящее событие | Единая, платформонезависимая модель события от пользователя: платформа, бот, пользователь, чат, тип, текст, payload, `update_id` (ключ идемпотентности), `callback_id` (подтверждение нажатия), `message_id` (только для callback — правка на месте, ADR-0012) | `IncomingEvent` | FlowExecution |
 | Нажатие кнопки | Событие нажатия кнопки/callback от пользователя | `ButtonClicked` | FlowExecution |
 | Открытие mini app | Событие запуска mini app пользователем | `MiniAppOpened` | FlowExecution |
 | Состояние пользователя | Текущий шаг пользователя в сценарии и его переменные (FSM). Одно активное состояние на пару (бот, пользователь) | `Session` | FlowExecution |
@@ -52,12 +52,17 @@ owner: ""
 | Порт | Назначение |
 |---|---|
 | `BotPlatformPort` | Отправка сообщений/кнопок, ответ на callback, построение кнопки mini app — абстракция над Telegram/MAX |
+| `BotRepository` | Хранение и чтение агрегата `Bot` |
 | `FlowRepository` | Хранение и чтение сценариев (`Flow`) |
 | `SessionRepository` | Хранение состояния пользователя (`Session`) |
+| `SessionRetentionPort` | Ретеншен ПДн сессий (BR-008): просрочка неактивных и удаление завершённых |
 | `TokenVaultPort` | Безопасное хранение и выдача токенов ботов |
 | `NotificationTargetResolverPort` | Резолв роли адресата уведомлений в chat_id платформы (блок `notify`, ADR-0010) |
+| `NotificationTargetWriterPort` | Привязка роли адресата уведомлений к chat_id (Admin API, ADR-0010) |
+| `SecretResolverPort` | Чтение секрета подключения (`{{secret:имя}}`) для блока `http_request` |
+| `ConnectionSecretWriterPort` | Запись секрета подключения (Admin API) |
 | `CodeExecutorPort` | Исполнение Python-блока в изоляции |
-| `FileStoragePort` | Хранение файлов/медиа |
+| `FileStoragePort` | Хранение файлов/медиа (план — порта в коде пока нет) |
 
 ## Как пополнять глоссарий
 

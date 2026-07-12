@@ -1,7 +1,7 @@
 ---
 status: draft
-version: "1.6"
-updated: 2026-07-11
+version: "1.7"
+updated: 2026-07-12
 verified_commit: ""
 owner: ""
 ---
@@ -74,7 +74,7 @@ ADR только со статусом `proposed` и сообщает об эт�
 | [0003](0003-flow-engine-blocks-and-sandbox.md) | Движок сценариев на блоках + изолированные Python-блоки | proposed | 2026-07-06 |
 | [0004](0004-webhook-platform-integration.md) | Приём обновлений через webhook | proposed | 2026-07-06 |
 | [0005](0005-capability-matrix.md) | Матрица возможностей платформ + единые блоки | proposed | 2026-07-06 |
-| [0006](0006-mini-app-as-web-product.md) | Mini app как отдельный web-продукт с bridge | proposed | 2026-07-06 |
+| [0006](0006-mini-app-as-web-product.md) | Mini app как отдельный web-продукт с bridge | accepted | 2026-07-06 |
 | [0007](0007-visual-flow-editor.md) | Визуальный редактор сценариев — React + React Flow | proposed | 2026-07-08 |
 | [0008](0008-persistence-model.md) | Модель хранения: версии Flow в JSONB, Session в PG+Redis | proposed | 2026-07-08 |
 | [0009](0009-max-adapter-thin-client.md) | MaxBotAdapter — тонкий httpx-клиент вместо SDK maxapi | proposed | 2026-07-08 |
@@ -82,7 +82,8 @@ ADR только со статусом `proposed` и сообщает об эт�
 | [0011](0011-session-pii-retention.md) | Ретеншен и стирание ПДн сессий (BR-008) | proposed | 2026-07-10 |
 | [0012](0012-message-edit-in-place.md) | Обновление отправленных сообщений (edit-in-place ответа на нажатие) | proposed | 2026-07-11 |
 | [0013](0013-structured-logging.md) | Структурное логирование и файлы ошибок | proposed | 2026-07-11 |
+| [0014](0014-auto-webhook-registration.md) | Автоматическая регистрация вебхука при публикации | proposed | 2026-07-12 |
 
-ADR-0001 и 0002 приняты (основа проекта); 0003–0013 — черновики на ратификацию
-командой: статус `accepted` им проставляет владелец раздела
+ADR-0001, 0002 и 0006 приняты; 0003–0005 и 0007–0014 — черновики на
+ратификацию командой: статус `accepted` им проставляет владелец раздела
 ([../_meta/governance.md](../_meta/governance.md)).

@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.0"
-updated: 2026-07-06
+version: "1.1"
+updated: 2026-07-12
 verified_commit: ""
 owner: "teamlead"
 ---
@@ -25,18 +25,23 @@ owner: "teamlead"
 
 | Слой | Что содержит | Что запрещено | Пакет в коде |
 |---|---|---|---|
-| domain | сущности (`Bot`, `Flow`, `Node`, `Trigger`, `Button`, `MiniApp`), value objects (`Platform`, `ChatId`, `Token`), доменные события (`IncomingEvent`, `ButtonClicked`, `MiniAppOpened`), инварианты сценария, доменные ошибки | любые импорты из внешних слоёв; фреймворки, ORM, HTTP, SDK платформ, I/O | `src/domain/` |
-| application | use cases (`RunFlowUseCase`, `ProcessUpdateUseCase`, `SendMessageUseCase`, `CreateBotUseCase`, `PublishBotUseCase`, `OpenMiniAppUseCase`, `ExecuteNodeUseCase`), порты (`BotPlatformPort`, `FlowRepository`, `SessionRepository`, `FileStoragePort`, `TokenVaultPort`, `CodeExecutorPort`), DTO границ | знание о конкретной БД/HTTP/SDK; условия `if platform == …`; бизнес-инварианты, дублирующие domain | `src/application/` |
-| infrastructure | реализации портов: `platforms/telegram/` и `platforms/max/` (adapter, mapper, webhook, mini_app_auth), `db/` (модели SQLAlchemy, репозитории), `queue/`, `code_executor/` (sandbox), token vault | бизнес-логика; обращения к presentation; импорт одного платформенного адаптера из другого | `src/infrastructure/` |
+| domain | сущности (`Bot`, `Flow`, `Node`, `Trigger`, `Button`, `MiniApp`), value objects (`Platform`, `BotStatus`, `Token`), доменные события (`IncomingEvent`, `ButtonClicked`, `MiniAppOpened`), инварианты сценария, доменные ошибки | любые импорты из внешних слоёв; фреймворки, ORM, HTTP, SDK платформ, I/O | `src/domain/` |
+| application | use cases (`ProcessUpdateUseCase`, `CreateBotUseCase`, `GetBotUseCase`, `PublishBotUseCase`, `AttachMiniAppUseCase`, `AuthenticateMiniAppUseCase`, `SubmitMiniAppResultUseCase`, `SaveFlowDraftUseCase`, `GetFlowDraftUseCase`, `PurgeExpiredSessionsUseCase`, `SetConnectionSecretUseCase`, `SetNotificationTargetUseCase`), порты (`BotPlatformPort`, `BotRepository`, `FlowRepository`, `SessionRepository`, `SessionRetentionPort`, `TokenVaultPort`, `CodeExecutorPort` — реализация в плане, `HttpClientPort`, `IdempotencyPort`, `SecretResolverPort`/`ConnectionSecretWriterPort`, `NotificationTargetResolverPort`/`NotificationTargetWriterPort`), DTO границ | знание о конкретной БД/HTTP/SDK; условия `if platform == …`; бизнес-инварианты, дублирующие domain | `src/application/` |
+| infrastructure | реализации портов: `platforms/telegram/` и `platforms/max/` (adapter.py, mini_app_auth.py, webhook.py), `db/` (модели SQLAlchemy: models.py, repositories.py, mappers.py), `cache/`, `http/`, `integrations/`, `maintenance/`, `observability/`, `security/` (token vault: file_token_vault.py); `code_executor/` (sandbox) — план, [ADR-0003](../decisions/0003-flow-engine-blocks-and-sandbox.md) | бизнес-логика; обращения к presentation; импорт одного платформенного адаптера из другого | `src/infrastructure/` |
 | presentation | FastAPI-роуты: `api/admin_routes.py` (конструктор), `api/webhook_routes.py` (приём вебхуков), схемы запросов/ответов, middleware | бизнес-логика; доступ к БД/адаптерам в обход application | `src/presentation/` |
 
 Ориентировочное дерево (канон структуры — здесь; отклонения оформляются ADR):
 
 ```
 src/
-  domain/         bot/entities.py  bot/value_objects.py  bot/events.py  bot/rules.py
+  domain/         bot/ (entities.py, value_objects.py)
+                  flow/ (entities.py, value_objects.py, codec.py, conditions.py,
+                         interpolation.py, version.py)
+                  session/  events.py  capabilities.py  errors.py
   application/    use_cases/…  ports/bot_platform.py  ports/flow_repository.py  …
-  infrastructure/ platforms/telegram/…  platforms/max/…  db/…  queue/…  code_executor/…
+  infrastructure/ platforms/telegram/…  platforms/max/…  db/…  cache/…  http/…
+                  integrations/…  maintenance/…  observability/…  security/…
+                  code_executor/… (план, ADR-0003)
   presentation/   api/admin_routes.py  api/webhook_routes.py  schemas/
   main.py         # composition root
 ```
@@ -69,13 +74,18 @@ Infrastructure зависит от application/domain (реализует их �
 
 Проверка границ **обязательна и автоматизирована** — «глазами на ревью» не считается.
 
-- Инструмент: **import-linter** (Python). Контракт — `.importlinter` в корне репозитория:
+- Инструмент: **import-linter** (Python). Шесть контрактов в `.importlinter`
+  в корне репозитория:
   - `layers`: `presentation` → `application` → `domain` (внешние выше внутренних);
-  - `forbidden`: `domain` не импортирует `application`/`infrastructure`/`presentation`
-    и внешние фреймворки (`fastapi`, `sqlalchemy`, `aiogram`, `httpx`, `redis`);
-  - `independence`: `infrastructure.platforms.telegram` и
+  - `domain-pure`: `domain` не импортирует `application`/`infrastructure`/`presentation`
+    и внешние фреймворки (`fastapi`, `sqlalchemy`, `aiogram`, `httpx`, `redis`, `celery`);
+  - `application-pure`: `application` не импортирует `infrastructure`/`presentation`
+    и те же фреймворки (плюс `alembic`);
+  - `presentation-no-infra`: `presentation` не импортирует `infrastructure` напрямую;
+  - `infra-no-presentation`: `infrastructure` не импортирует `presentation`;
+  - `platform-independence`: `infrastructure.platforms.telegram` и
     `infrastructure.platforms.max` не импортируют друг друга.
-- Запуск: `lint-imports` — локально (до и после правки `src/`), в pre-commit и в
+- Запуск: `lint-imports` — локально (до и после правки `src/`) и в
   CI-джобе `arch-lint` ([.github/workflows/arch-lint.yml](../../.github/workflows/arch-lint.yml)).
   Красный `lint-imports` = красная сборка, мерж закрыт.
 - **Нашёл протечку — чини, а не заглушай.** Протокол исправления (куда выносить
