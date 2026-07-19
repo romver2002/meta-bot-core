@@ -194,6 +194,9 @@ body { background: var(--canvas); }
 
 .field { display: block; margin-bottom: 12px; }
 .field__label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 5px; }
+.field__hint { display: block; margin-top: 2px; font-size: 11px; line-height: 1.4; color: var(--text-2); }
+.field__hint--warn { color: #92400e; }
+.btnsField__row input.is-invalid { border-color: #dc2626; background: #fef2f2; }
 .field input, .field select, .field textarea, .btnsField input, .btnsField select {
   width: 100%; font-size: 13px; padding: 8px 10px; border: 1px solid var(--hairline);
   border-radius: 8px; background: var(--panel-2); color: var(--text-1); font-family: inherit; }

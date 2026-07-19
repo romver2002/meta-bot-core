@@ -139,3 +139,132 @@ test('save с values-словарём И заполненным «Ключ/Зн�
   assert.equal(result.ok, false)
   assert.ok(result.problems.some((problem) => problem.nodeId === 'wipe' && problem.message.includes('values-словарь')))
 })
+
+test('быстрые ответы ask уходят в node.buttons, не в params, и валидны без входа-триггера', () => {
+  const ask = {
+    id: 'ask',
+    data: {
+      group: 'block',
+      type: 'ask',
+      params: {
+        prompt: 'Бюджет?',
+        save_as: 'budget',
+        buttons: [
+          { label: 'До 10 тыс', action: 'callback', target: 'до 10 тыс ₽' },
+          { label: 'Больше', action: 'callback', target: '10+ тыс ₽' },
+        ],
+      },
+    },
+  }
+  const nodes = [trigger, ask]
+  const edges = [{ id: 'start-ask', source: 'start', target: 'ask' }]
+  assert.equal(validateFlow(nodes, edges, 'telegram').ok, true)
+
+  const serialized = serializeDefinition(nodes, edges).nodes[0]
+  assert.equal(serialized.buttons.length, 2)
+  assert.equal(serialized.buttons[0].target, 'до 10 тыс ₽')
+  assert.ok(!('buttons' in serialized.params), 'кнопки не должны дублироваться в params')
+})
+
+test('save: пустой values-словарь не отключает требование «Ключ» и не сериализуется', () => {
+  const empty = {
+    id: 'save',
+    data: { group: 'block', type: 'save', params: { key: '', value: '', values: {} } },
+  }
+  const nodes = [trigger, empty]
+  const edges = [{ id: 'start-save', source: 'start', target: 'save' }]
+
+  const result = validateFlow(nodes, edges, 'telegram')
+  assert.equal(result.ok, false)
+  assert.ok(result.problems.some((problem) => problem.message.includes('Ключ')))
+  assert.ok(!('values' in serializeDefinition(nodes, edges).nodes[0].params))
+})
+
+test('callback-payload длиннее платформенного лимита байт подсвечивается (TG 64, MAX 1024)', () => {
+  const longValue = 'Индивидуальные условия сотрудничества и расширенная поддержка' // > 64 байт в UTF-8
+  const ask = {
+    id: 'ask',
+    data: {
+      group: 'block',
+      type: 'ask',
+      params: {
+        prompt: 'Тариф?',
+        save_as: 'plan',
+        buttons: [{ label: 'Индивидуально', action: 'callback', target: longValue }],
+      },
+    },
+  }
+  const nodes = [trigger, ask]
+  const edges = [{ id: 'start-ask', source: 'start', target: 'ask' }]
+
+  const telegram = validateFlow(nodes, edges, 'telegram')
+  assert.equal(telegram.ok, false)
+  assert.ok(telegram.problems.some((problem) => problem.message.includes('64 байт')))
+  // MAX допускает payload до 1024 байт — тот же сценарий валиден.
+  assert.equal(validateFlow(nodes, edges, 'max').ok, true)
+})
+
+test('назначение кнопки из одних пробелов считается пустым', () => {
+  const ask = {
+    id: 'ask',
+    data: {
+      group: 'block',
+      type: 'ask',
+      params: {
+        prompt: 'Бюджет?',
+        save_as: 'budget',
+        buttons: [{ label: 'Пробел', action: 'callback', target: '  ' }],
+      },
+    },
+  }
+  const nodes = [trigger, ask]
+  const edges = [{ id: 'start-ask', source: 'start', target: 'ask' }]
+  const result = validateFlow(nodes, edges, 'telegram')
+  assert.equal(result.ok, false)
+  assert.ok(result.problems.some((problem) => problem.message.includes('укажите назначение')))
+})
+
+test('имя переменной save, непригодное для {подстановки}, подсвечивается', () => {
+  const wipe = {
+    id: 'wipe',
+    data: { group: 'block', type: 'save', params: { key: '', value: '', values: { 'имя клиента': '' } } },
+  }
+  const nodes = [trigger, wipe]
+  const edges = [{ id: 'start-wipe', source: 'start', target: 'wipe' }]
+  const result = validateFlow(nodes, edges, 'telegram')
+  assert.equal(result.ok, false)
+  assert.ok(result.problems.some((problem) => problem.message.includes('не подставится')))
+
+  const okNodes = [trigger, {
+    id: 'wipe',
+    data: { group: 'block', type: 'save', params: { key: '', value: '', values: { req_name: '' } } },
+  }]
+  assert.equal(validateFlow(okNodes, edges, 'telegram').ok, true)
+})
+
+test('значение быстрого ответа, совпадающее с payload входа, подсвечивается как коллизия', () => {
+  const cbTrigger = {
+    id: 't-menu',
+    data: { group: 'trigger', type: 'callback', config: { payload: 'menu' } },
+  }
+  const ask = {
+    id: 'ask',
+    data: {
+      group: 'block',
+      type: 'ask',
+      params: {
+        prompt: 'Что дальше?',
+        save_as: 'next_step',
+        buttons: [{ label: 'Меню', action: 'callback', target: 'menu' }],
+      },
+    },
+  }
+  const nodes = [trigger, cbTrigger, ask, message('menu-node')]
+  const edges = [
+    { id: 'start-ask', source: 'start', target: 'ask' },
+    { id: 'menu-edge', source: 't-menu', target: 'menu-node' },
+  ]
+  const result = validateFlow(nodes, edges, 'telegram')
+  assert.equal(result.ok, false)
+  assert.ok(result.problems.some((problem) => problem.message.includes('сработает как ответ')))
+})

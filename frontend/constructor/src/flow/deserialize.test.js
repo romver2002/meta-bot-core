@@ -48,7 +48,7 @@ function canonicalDefinition() {
         id: 'n6',
         type: 'ask',
         params: { prompt: 'Что дальше?', save_as: 'next_step' },
-        buttons: [{ label: 'Меню', action: 'callback', target: 'go_menu' }],
+        buttons: [{ label: 'Позже', action: 'callback', target: 'напишу позже' }],
       },
       {
         // Params шире каталога: values-форма save (стирание ПДн, BR-008) должна
@@ -201,4 +201,16 @@ test('nextNodeIdNumber продолжает нумерацию только чи
   // id за пределами safe integer сломал бы счётчик (1e18 + 1 === 1e18) —
   // такие id игнорируются.
   assert.equal(nextNodeIdNumber(['n9007199254740993', 'n105']), 106)
+})
+
+test('save без values в definition получает пустой словарь в редакторе и не приобретает его при сохранении', () => {
+  const definition = {
+    doc_schema_version: 1,
+    triggers: [{ id: 't1', type: 'start', target_node_id: 'n1', config: {} }],
+    nodes: [{ id: 'n1', type: 'save', params: { key: 'lead', value: 'tg' }, buttons: [] }],
+    transitions: [],
+  }
+  const { nodes, edges } = deserializeDefinition(definition)
+  assert.deepEqual(nodes.find((node) => node.id === 'n1').data.params.values, {})
+  assert.deepEqual(serializeDefinition(nodes, edges), definition)
 })

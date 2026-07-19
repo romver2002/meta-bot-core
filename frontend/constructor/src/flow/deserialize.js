@@ -121,13 +121,13 @@ function editorParams(block) {
   let buttonsAssigned = false
   for (const field of def.fields) {
     catalogKeys.add(field.key)
-    if (field.kind === 'buttons') {
+    if (field.kind === 'buttons' || field.kind === 'quick_replies') {
       params[field.key] = buttons
       buttonsAssigned = true
       continue
     }
     if (!(field.key in source)) {
-      params[field.key] = ''
+      params[field.key] = field.kind === 'kv' ? {} : ''
       continue
     }
     const value = source[field.key]

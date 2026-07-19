@@ -8,10 +8,17 @@ function summary(type, params = {}) {
   switch (type) {
     case 'send_message': return params.text || '—'
     case 'show_buttons': return `${params.text || '—'} · ${(params.buttons || []).length} кноп.`
-    case 'ask': return `${params.prompt || '—'} → {${params.save_as || '?'}}`
+    case 'ask': {
+      const replies = Array.isArray(params.buttons) ? params.buttons.length : 0
+      const base = `${params.prompt || '—'} → {${params.save_as || '?'}}`
+      return replies > 0 ? `${base} · ${replies} вар.` : base
+    }
     case 'condition': return params.expression || '—'
     case 'open_mini_app': return params.button_text ? `кнопка: ${params.button_text}` : 'настройте кнопку запуска'
-    case 'save': return `${params.key || '?'} = ${params.value || ''}`
+    case 'save': {
+      const values = params.values && typeof params.values === 'object' ? Object.keys(params.values).length : 0
+      return values > 0 ? `значений разом: ${values}` : `${params.key || '?'} = ${params.value || ''}`
+    }
     case 'http_request': return `${params.method || 'GET'} ${params.url || '—'}`
     case 'notify': return `роль: ${params.to || '—'}`
     case 'custom_code': return 'Python · песочница'

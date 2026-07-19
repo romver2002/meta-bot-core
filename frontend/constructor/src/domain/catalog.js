@@ -104,6 +104,10 @@ export const BLOCKS = [
     fields: [
       { key: 'prompt', label: 'Вопрос', kind: 'textarea', required: true, placeholder: 'Как к вам обращаться?' },
       { key: 'save_as', label: 'Переменная', kind: 'text', required: true, placeholder: 'req_name' },
+      // Кнопки-варианты под вопросом: нажатие сохраняет значение как ответ,
+      // свой вариант по-прежнему можно написать текстом (process_update,
+      // «быстрый ответ равноправен набранному тексту»).
+      { key: 'buttons', label: 'Быстрые ответы', kind: 'quick_replies' },
     ],
   },
   {
@@ -146,6 +150,10 @@ export const BLOCKS = [
     fields: [
       { key: 'key', label: 'Ключ', kind: 'text', required: true, placeholder: 'lead_source' },
       { key: 'value', label: 'Значение', kind: 'text', placeholder: '{answer}' },
+      // Несколько переменных одним узлом; пустое значение стирает переменную
+      // (BR-008). Непустой список отключает пару «Ключ/Значение» — движок
+      // исполняет только values (process_update).
+      { key: 'values', label: 'Несколько значений разом', kind: 'kv' },
     ],
   },
   {
@@ -221,7 +229,8 @@ export function blockAvailable(block, platformId) {
 export function makeDefaultParams(type) {
   const def = BLOCK_BY_TYPE[type]
   return Object.fromEntries((def?.fields || []).map((field) => {
-    if (field.kind === 'buttons') return [field.key, []]
+    if (field.kind === 'buttons' || field.kind === 'quick_replies') return [field.key, []]
+    if (field.kind === 'kv') return [field.key, {}]
     if (field.defaultValue !== undefined) return [field.key, field.defaultValue]
     return [field.key, '']
   }))

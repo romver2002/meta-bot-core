@@ -15,6 +15,14 @@ const TRANSITIONAL_BLOCKS = new Set([
 
 const BUTTON_ACTIONS = new Set(['next', 'callback', 'open_mini_app', 'url'])
 
+// Платформенные лимиты callback-payload в байтах (platform-reference.md):
+// Telegram callback_data — 1–64 байта, MAX payload — до 1024.
+const CALLBACK_PAYLOAD_BYTE_LIMITS = { telegram: 64, max: 1024 }
+
+// Ключи переменных подставляются в текст только как {ascii_identifier}
+// (domain/flow/interpolation.py) — прочие имена молча не отрендерятся.
+const VARIABLE_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/
+
 export function serializeFlow(nodes, edges, meta) {
   return {
     bot: { name: meta.botName, platform: meta.platform },
@@ -106,14 +114,15 @@ export function validateFlow(nodes, edges, platformId, options = {}) {
 
     // Блок save валиден и в форме values-словаря (несколько переменных одним
     // узлом, в т.ч. стирание ПДн — BR-008, process_update.py); тогда пара
-    // «Ключ/Значение» из каталога не обязательна.
+    // «Ключ/Значение» из каталога не обязательна. Пустой {} — не форма values.
     const savesValuesMap = node.data.type === 'save'
       && node.data.params.values !== null
       && node.data.params.values !== undefined
       && typeof node.data.params.values === 'object'
       && !Array.isArray(node.data.params.values)
+      && Object.keys(node.data.params.values).length > 0
     for (const field of def.fields || []) {
-      if (field.kind === 'buttons') continue
+      if (field.kind === 'buttons' || field.kind === 'quick_replies' || field.kind === 'kv') continue
       if (savesValuesMap && field.key === 'key') continue
       if (field.required && !String(node.data.params[field.key] ?? '').trim()) {
         addProblem(problems, `${nodeLabel(node)}: заполните «${field.label}»`, node.id)
@@ -124,6 +133,18 @@ export function validateFlow(nodes, edges, platformId, options = {}) {
     if (savesValuesMap
       && (String(node.data.params.key ?? '').trim() || String(node.data.params.value ?? '').trim())) {
       addProblem(problems, `${nodeLabel(node)}: узел исполняет values-словарь — уберите «Ключ/Значение» или сам словарь`, node.id)
+    }
+    // Имя переменной, не подходящее под {identifier}, никогда не подставится
+    // в текст (interpolation.py) — записывать его почти наверняка ошибка.
+    if (node.data.type === 'save') {
+      const variableNames = savesValuesMap
+        ? Object.keys(node.data.params.values)
+        : [String(node.data.params.key ?? '').trim()].filter(Boolean)
+      for (const name of variableNames) {
+        if (!VARIABLE_NAME.test(name)) {
+          addProblem(problems, `${nodeLabel(node)}: переменная «${name}» не подставится в {…} — допустимы латиница, цифры и «_»`, node.id)
+        }
+      }
     }
 
     const buttons = Array.isArray(node.data.params.buttons) ? node.data.params.buttons : []
@@ -138,7 +159,16 @@ export function validateFlow(nodes, edges, platformId, options = {}) {
         addProblem(problems, `${prefix}: неизвестное действие`, node.id)
         continue
       }
-      if (!button.target) addProblem(problems, `${prefix}: укажите назначение`, node.id)
+      // Назначение из одних пробелов ушло бы в payload и молча стало бы
+      // «ответом» пользователя — считаем его пустым.
+      if (!String(button.target || '').trim()) addProblem(problems, `${prefix}: укажите назначение`, node.id)
+      if (button.action === 'callback' && button.target) {
+        const limit = CALLBACK_PAYLOAD_BYTE_LIMITS[platformId]
+        const bytes = new TextEncoder().encode(button.target).length
+        if (limit && bytes > limit) {
+          addProblem(problems, `${prefix}: значение длиннее ${limit} байт — ${PLATFORMS[platformId]?.label || platformId} не отправит кнопку (сейчас ${bytes})`, node.id)
+        }
+      }
       if (button.action === 'next' && button.target && !blockIds.has(button.target)) {
         addProblem(problems, `${prefix} ведёт в отсутствующий блок`, node.id)
       }
@@ -155,6 +185,13 @@ export function validateFlow(nodes, edges, platformId, options = {}) {
       // набранному тексту»), вход «Нажатие кнопки» для него не нужен.
       if (button.action === 'callback' && button.target && node.data.type !== 'ask' && !callbackPayloads.has(button.target)) {
         addProblem(problems, `${prefix}: нет входа «Нажатие кнопки» с payload «${button.target}»`, node.id)
+      }
+      // Обратная коллизия: значение быстрого ответа, совпадающее с payload
+      // входа, перехватит навигацию — пока блок ждёт ответ, движок сохранит
+      // payload как ответ и до входа дело не дойдёт (_ask_option_answer
+      // проверяется раньше триггеров).
+      if (button.action === 'callback' && button.target && node.data.type === 'ask' && callbackPayloads.has(button.target)) {
+        addProblem(problems, `${prefix}: значение «${button.target}» совпадает с payload входа «Нажатие кнопки» — во время вопроса такая кнопка сработает как ответ, а не как переход`, node.id)
       }
       if ((button.action === 'url' || button.action === 'open_mini_app') && button.target && !button.target.startsWith('https://')) {
         addProblem(problems, `${prefix}: URL должен начинаться с https://`, node.id)
@@ -212,8 +249,20 @@ export function normalizeParams(type, params = {}) {
   const catalogKeys = new Set(['buttons'])
   for (const field of def?.fields || []) {
     catalogKeys.add(field.key)
-    if (field.kind === 'buttons') continue
+    // Кнопки (обычные и быстрые ответы) живут на уровне узла definition,
+    // не в params — их эмитит serializeDefinition.
+    if (field.kind === 'buttons' || field.kind === 'quick_replies') continue
     const raw = params[field.key]
+    if (field.kind === 'kv') {
+      // Словарь пишется только непустым: пустой {} перебил бы пару
+      // «Ключ/Значение» у движка (isinstance dict побеждает). Осознанный
+      // компромисс: authored-через-API values:{} рядом с key/value (no-op)
+      // при пересохранении из редактора станет исполняемой парой.
+      if (raw !== null && typeof raw === 'object' && !Array.isArray(raw) && Object.keys(raw).length > 0) {
+        result[field.key] = raw
+      }
+      continue
+    }
     if (field.kind === 'json') {
       const parsed = parseJson(raw, field)
       if (parsed.ok) result[field.key] = parsed.value

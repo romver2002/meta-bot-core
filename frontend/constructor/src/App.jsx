@@ -26,7 +26,7 @@ import ApiPanel from './components/ApiPanel.jsx'
 import PanelResizeHandle from './components/PanelResizeHandle.jsx'
 import { initialNodes, initialEdges } from './flow/initialFlow.js'
 import { deserializeDefinition, nextNodeIdNumber } from './flow/deserialize.js'
-import { buttonIndexFromHandle, isButtonEdge } from './flow/handles.js'
+import { buttonHandleId, buttonIndexFromHandle, isButtonEdge } from './flow/handles.js'
 import { createBlockSelectionSnapshot, pasteBlockSelectionSnapshot } from './flow/selection.js'
 import { serializeDefinition, validateFlow } from './flow/serialize.js'
 import { BLOCK_BY_TYPE, OUTCOME_LABELS, makeDefaultParams } from './domain/catalog.js'
@@ -576,11 +576,22 @@ function Editor() {
 
   const syncButtonEdges = useCallback((sourceId, buttons) => {
     const blockIds = new Set(nodes.filter((node) => node.data.group === 'block').map((node) => node.id))
+    // Подписи рёбер строятся по уже обновлённым кнопкам (nodes в замыкании
+    // отстаёт на один патч), а data существующих рёбер (изгибы) сохраняется.
+    const patchedNodes = nodes.map((node) => (
+      node.id === sourceId
+        ? { ...node, data: { ...node.data, params: { ...node.data.params, buttons } } }
+        : node
+    ))
     setEdges((current) => {
       const otherEdges = current.filter((edge) => !(edge.source === sourceId && isButtonEdge(edge)))
       const buttonEdges = buttons.flatMap((button, index) => {
         if (button.action !== 'next' || !blockIds.has(button.target)) return []
-        return [presentationEdge({ source: sourceId, sourceHandle: `button:${index}`, target: button.target }, nodes)]
+        const sourceHandle = buttonHandleId(index)
+        const prior = current.find((edge) => (
+          edge.source === sourceId && edge.sourceHandle === sourceHandle && edge.target === button.target
+        ))
+        return [presentationEdge({ source: sourceId, sourceHandle, target: button.target, data: prior?.data }, patchedNodes)]
       })
       return [...otherEdges, ...buttonEdges]
     })
