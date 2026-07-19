@@ -3,6 +3,9 @@ import { useRef, useState } from 'react'
 import {
   attachMiniApp,
   createBot,
+  getBot,
+  getFlowDraft,
+  listBots,
   publishBot,
   saveFlowDraft,
   setConnectionSecret,
@@ -90,12 +93,16 @@ export default function ApiPanel({
   session,
   onSessionChange,
   onConnected,
+  onOpened,
   onSaved,
   onPublished,
   isDirty,
+  canvasTouched,
   onCheck,
 }) {
   const [botToken, setBotToken] = useState('')
+  const [openBotId, setOpenBotId] = useState('')
+  const [botList, setBotList] = useState(null)
   const [secretName, setSecretName] = useState('integration_api_key')
   const [secretValue, setSecretValue] = useState('')
   const activeOperationRef = useRef(false)
@@ -131,8 +138,76 @@ export default function ApiPanel({
       token: botToken,
     })
     setBotToken('')
+    // Идемпотентный connect (BR-009): тот же токен возвращает существующего
+    // бота — если у него уже есть сценарий, ведём пользователя прямо в него.
+    if (bot.flow_id) {
+      let draft = null
+      try {
+        draft = await getFlowDraft(session.baseUrl, bot.id)
+      } catch {
+        // Бот уже подключён на сервере — сбой чтения черновика не должен
+        // выглядеть как провал подключения.
+        onConnected(bot)
+        return 'Бот подключён, но сценарий с сервера загрузить не удалось — нажмите «Перечитать сценарий с сервера».'
+      }
+      if (draft) {
+        const replaceCanvas = !canvasTouched
+          || window.confirm('У этого бота уже есть сценарий на сервере. Открыть его? Текущая канва будет заменена.')
+        if (replaceCanvas) {
+          onOpened(bot, draft)
+          return `Бот подключён — сценарий «${(draft.name || bot.name).trim() || bot.id}» загружен с сервера`
+        }
+        // Канва остаётся локальной, но row_version серверного черновика нужен:
+        // иначе «Сохранить» упрётся в ложный 409 «изменён в другом сеансе».
+        onConnected(bot, draft)
+        return 'Бот подключён; серверный сценарий не открыт — «Сохранить» перезапишет его текущей канвой, «Перечитать сценарий с сервера» вернёт серверную версию.'
+      }
+    }
     onConnected(bot)
     return `Бот подключён к конструктору. Теперь сохраните сценарий.`
+  })
+
+  // Загрузка сценария с сервера: карточка бота + черновик (204 -> чистый лист).
+  const loadFromServer = async (botId) => {
+    const bot = await getBot(session.baseUrl, botId)
+    const draft = await getFlowDraft(session.baseUrl, botId)
+    onOpened(bot, draft)
+    return draft
+      ? `Сценарий «${(draft.name || bot.name).trim() || bot.id}» загружен с сервера`
+      : 'У бота ещё нет черновика — соберите сценарий и сохраните его'
+  }
+
+  const confirmReplaceCanvas = () => (
+    !canvasTouched
+    || window.confirm('Заменить текущий сценарий данными с сервера? Несохранённые изменения будут потеряны.')
+  )
+
+  const openExisting = () => run('open', async () => {
+    const botId = openBotId.trim()
+    if (!botId) throw new Error('Укажите ID бота, полученный при подключении')
+    if (!confirmReplaceCanvas()) return 'Загрузка отменена — текущий сценарий не тронут'
+    const message = await loadFromServer(botId)
+    setOpenBotId('')
+    return message
+  })
+
+  const reloadFromServer = () => run('open', async () => {
+    if (!isConnected) throw new Error('Сначала подключите бота')
+    if (!confirmReplaceCanvas()) return 'Загрузка отменена — текущий сценарий не тронут'
+    return loadFromServer(session.botId)
+  })
+
+  const refreshBotList = () => run('bots', async () => {
+    const registry = await listBots(session.baseUrl)
+    setBotList(registry.bots)
+    return registry.bots.length > 0
+      ? `В реестре ${registry.bots.length} бот(ов)`
+      : 'Ботов пока нет — подключите первого по токену'
+  })
+
+  const openFromList = (botId) => run('open', async () => {
+    if (!confirmReplaceCanvas()) return 'Загрузка отменена — текущий сценарий не тронут'
+    return loadFromServer(botId)
   })
 
   const save = () => run('save', async () => {
@@ -215,10 +290,16 @@ export default function ApiPanel({
         note="Конструктор не создаёт аккаунт бота в Telegram или MAX. Он подключает уже выданный токен к сценарию."
       >
         {isConnected ? (
-          <div className="connectionCard">
-            <strong>Подключённый бот</strong>
-            <span>{session.connectedBotName || 'Имя доступно в настройках платформы'} · {platformName(platform)} · платформа закреплена</span>
-          </div>
+          <>
+            <div className="connectionCard">
+              <strong>Подключённый бот</strong>
+              <span>{session.connectedBotName || 'Имя доступно в настройках платформы'} · {platformName(platform)} · платформа закреплена</span>
+              <small title="По этому ID сценарий можно снова открыть в другом сеансе">ID: <code>{session.botId}</code></small>
+            </div>
+            <button className="btn btn--secondary" type="button" onClick={reloadFromServer} disabled={isBusy}>
+              Перечитать сценарий с сервера
+            </button>
+          </>
         ) : (
           <>
             <Field label="Токен уже зарегистрированного бота" hint="Токен используется только для подключения и не попадает в Flow.">
@@ -227,7 +308,40 @@ export default function ApiPanel({
             <button className="btn btn--secondary" type="button" onClick={connect} disabled={isBusy || !botToken.trim()}>
               Подключить {platformName(platform)}-бота
             </button>
+            <Field label="…или откройте уже подключённого бота" hint="ID показан в карточке бота после подключения. Сценарий загрузится с сервера, узлы будут расставлены автоматически.">
+              <input value={openBotId} onChange={(event) => setOpenBotId(event.target.value)} placeholder="ID бота (UUID)" autoComplete="off" />
+            </Field>
+            <button className="btn btn--secondary" type="button" onClick={openExisting} disabled={isBusy || !openBotId.trim()}>
+              Открыть сценарий с сервера
+            </button>
           </>
+        )}
+      </Section>
+
+      <Section title="Мои боты" note="Реестр ботов этого сервера: статус, платформа и открытие сценария в один клик.">
+        <button className="btn btn--secondary" type="button" onClick={refreshBotList} disabled={isBusy}>
+          {botList === null ? 'Показать моих ботов' : 'Обновить список'}
+        </button>
+        {Array.isArray(botList) && botList.length === 0 && (
+          <p className="apiSection__note">Ботов пока нет — подключите первого по токену в шаге 1.</p>
+        )}
+        {Array.isArray(botList) && botList.length > 0 && (
+          <ul className="botList">
+            {botList.map((bot) => (
+              <li key={bot.id} className={`botList__item ${bot.id === session.botId ? 'botList__item--current' : ''}`}>
+                <div className="botList__info">
+                  <strong>{bot.name || 'Без имени'}</strong>
+                  <small>
+                    {platformName(bot.platform)} · {bot.status === 'published' ? 'опубликован' : 'черновик'}
+                    {bot.id === session.botId ? ' · открыт сейчас' : ''}
+                  </small>
+                </div>
+                <button className="btn btn--secondary" type="button" onClick={() => openFromList(bot.id)} disabled={isBusy}>
+                  Открыть
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
       </Section>
 

@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+import datetime
 import uuid
 
 import pytest
+import sqlalchemy as sa
 
-from application.errors import ConcurrencyError
+from application.errors import BotCreationError, ConcurrencyError
 from domain.bot.entities import MiniApp
-from domain.bot.value_objects import BotStatus
+from domain.bot.value_objects import BotStatus, Token
 from domain.flow.codec import flow_to_definition
 from domain.flow.entities import Flow, Node
 from domain.flow.value_objects import NodeType
 from domain.flow.version import FlowVersionStatus
 from domain.session.entities import Session
+from infrastructure.db.models import BotModel
 from infrastructure.db.repositories import PgBotRepository, PgFlowRepository, PgSessionRepository
 from tests.unit.factories import make_bot, make_flow
 
@@ -105,6 +108,49 @@ async def test_bot_roundtrip_with_mini_app(session_factory) -> None:
     republished = await repo.get(bot.id)
     assert republished is not None
     assert republished.status is BotStatus.PUBLISHED
+
+
+async def test_token_fingerprint_lookup_and_race(session_factory) -> None:
+    """BR-009: поиск по отпечатку токена + уникальный индекс закрывает гонку connect."""
+    repo = PgBotRepository(session_factory)
+    fingerprint = "a" * 64
+    original = make_bot(_uid(), flow_id=_uid())
+    original.token = Token(vault_ref=original.token.vault_ref, fingerprint=fingerprint)
+    await repo.save(original)
+
+    found = await repo.find_by_token_fingerprint(fingerprint)
+    assert found is not None
+    assert found.id == original.id
+    assert found.token.fingerprint == fingerprint
+    assert await repo.find_by_token_fingerprint("b" * 64) is None
+
+    racer = make_bot(_uid(), flow_id=_uid())
+    racer.token = Token(vault_ref=racer.token.vault_ref, fingerprint=fingerprint)
+    with pytest.raises(BotCreationError):
+        await repo.save(racer)
+
+
+async def test_list_all_returns_newest_first_with_mini_app(session_factory) -> None:
+    repo = PgBotRepository(session_factory)
+    older, newer = make_bot(_uid(), flow_id=_uid()), make_bot(_uid(), flow_id=_uid())
+    newer.mini_app = MiniApp(id=_uid(), bot_id=newer.id, url="https://list.example.com", title="Реестр")
+    await repo.save(older)
+    await repo.save(newer)
+
+    # created_at задаётся явно: контракт «новые первыми» проверяется по времени
+    # создания, а не по случайному порядку вставки/микросекундам now().
+    base = datetime.datetime.now(tz=datetime.UTC)
+    async with session_factory() as db, db.begin():
+        for bot_id, created in ((older.id, base - datetime.timedelta(days=1)), (newer.id, base)):
+            await db.execute(
+                sa.update(BotModel).where(BotModel.id == uuid.UUID(bot_id)).values(created_at=created)
+            )
+
+    listed = await repo.list_all()
+    assert [bot.id for bot in listed] == [newer.id, older.id]
+    assert listed[0].mini_app is not None
+    assert listed[0].mini_app.url == "https://list.example.com"
+    assert listed[1].mini_app is None
 
 
 async def test_session_single_active_per_user_and_completion(session_factory) -> None:

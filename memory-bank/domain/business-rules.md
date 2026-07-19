@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.3"
-updated: 2026-07-12
+version: "1.4"
+updated: 2026-07-20
 verified_commit: ""
 owner: ""
 ---
@@ -45,6 +45,7 @@ Adapters + Mini App Runtime`. Конструктор управляет пове
 | BR-006 | Возможность или блок, недоступные на платформе бота по `CapabilityMatrix`, не предлагаются в конструкторе и отклоняются при публикации сценария | активно | Проектный дизайн 2026-07-06; [ADR-0005](../decisions/0005-capability-matrix.md) | `CapabilityMatrix` + `Flow.validate_for_publication` | `tests/unit/flow/test_flow_validate_capabilities.py` |
 | BR-007 | Init data mini app валидируется на backend по правилам платформы (подпись Telegram / данные MAX Bridge) до того, как данные пользователя считаются доверенными | активно | Проектный дизайн 2026-07-06; [ADR-0006](../decisions/0006-mini-app-as-web-product.md) | `platforms/{telegram,max}/mini_app_auth.py` + общие `webapp_signature.py` и `mini_app_identity.py` за `BotPlatformPort.validate_init_data`; use case `AuthenticateMiniAppUseCase` | `tests/unit/platforms/test_webapp_signature.py`, `tests/unit/platforms/test_mini_app_identity.py`, `tests/unit/api/test_api_miniapp.py` |
 | BR-008 | Минимизация ПДн сессий: переменные сценария живут не дольше сессии (завершение/просрочка стирает их); завершённые/просроченные сессии старше срока хранения удаляются целиком, включая `external_user_id`/`external_chat_id`; сбор ПДн в сценарии — только после явного согласия пользователя (экран согласия — данные Flow) | активно | Обращение с ПДн (152-ФЗ), решение 2026-07-10; [ADR-0011](../decisions/0011-session-pii-retention.md) | `Session.complete/expire` (домен) + `PurgeExpiredSessionsUseCase` за `SessionRetentionPort` + фоновая чистка composition root | `tests/unit/application/test_purge_expired_sessions.py`, `tests/integration/test_pg_repositories.py::test_session_retention_expires_idle_and_deletes_finished` |
+| BR-009 | Подключение бота идемпотентно: повторный `POST /bots` с тем же токеном возвращает существующего бота, а не создаёт дубль; дедуп — по одностороннему SHA-256-отпечатку токена (`Token.fingerprint`, колонка `bot.token_hash`), сам секрет в БД не попадает | активно | Решение Романа 2026-07-20; [ADR-0016](../decisions/0016-idempotent-bot-connect.md) | `CreateBotUseCase.execute` (+ `token_fingerprint`) за `BotRepository.find_by_token_fingerprint`; гонка закрыта уникальным индексом `ix_bot_token_hash`, проигравший компенсирует vault (`TokenVaultPort.delete`) и возвращает победителя | `tests/unit/application/test_create_bot.py`, `tests/unit/api/test_api_golden_path.py::test_connect_same_token_is_idempotent`, `tests/integration/test_pg_repositories.py::test_token_fingerprint_lookup_and_race` |
 
 Точные имена тестовых модулей с пометкой «уточнить у команды» — разумный дефолт
 по конвенции BR-001 (`tests/<уровень>/<область>/test_<правило>.py`); закрепляются

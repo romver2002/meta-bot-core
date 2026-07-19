@@ -89,7 +89,11 @@ async def test_attach_mini_app_https_ok() -> None:
             "/api/bots/bot-1/miniapp", json={"url": "https://shop.example.com", "title": "Витрина"}
         )
     assert response.status_code == 200
-    assert response.json()["id"] == "bot-1"
+    body = response.json()
+    assert body["id"] == "bot-1"
+    # Карточка бота отдаёт факт привязки: редактор восстанавливает сеанс
+    # (miniAppAttached) при открытии бота, не заставляя вводить URL заново.
+    assert body["mini_app"] == {"url": "https://shop.example.com", "title": "Витрина"}
 
 
 async def test_attach_mini_app_non_https_is_422() -> None:

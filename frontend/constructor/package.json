@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test src/api/adminApi.test.js src/flow/serialize.test.js src/flow/selection.test.js src/layout/panelLayout.test.js"
+    "test": "node --test src/api/adminApi.test.js src/flow/serialize.test.js src/flow/deserialize.test.js src/flow/selection.test.js src/layout/panelLayout.test.js"
   },
   "dependencies": {
     "@xyflow/react": "^12.3.5",

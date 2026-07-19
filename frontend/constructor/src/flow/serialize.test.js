@@ -81,3 +81,61 @@ test('requires an attached Mini App only for publication readiness', () => {
   assert.equal(publishReadiness.ok, false)
   assert.ok(publishReadiness.problems.some((problem) => problem.nodeId === 'mini-app'))
 })
+
+test('quick-reply: callback-кнопка на ask не требует входа «Нажатие кнопки», на меню — требует', () => {
+  const ask = {
+    id: 'ask',
+    data: {
+      group: 'block',
+      type: 'ask',
+      params: {
+        prompt: 'Бюджет?',
+        save_as: 'budget',
+        buttons: [{ label: 'До 10 тыс', action: 'callback', target: 'До 10 тыс' }],
+      },
+    },
+  }
+  const nodes = [trigger, ask]
+  const edges = [{ id: 'start-ask', source: 'start', target: 'ask' }]
+  assert.equal(validateFlow(nodes, edges, 'telegram').ok, true)
+
+  const menuNodes = [
+    trigger,
+    menu([{ label: 'До 10 тыс', action: 'callback', target: 'До 10 тыс' }]),
+  ]
+  const menuEdges = [{ id: 'start-menu', source: 'start', target: 'menu' }]
+  const result = validateFlow(menuNodes, menuEdges, 'telegram')
+  assert.equal(result.ok, false)
+  assert.ok(result.problems.some((problem) => problem.message.includes('нет входа «Нажатие кнопки»')))
+})
+
+test('save в форме values-словаря валиден без пары «Ключ/Значение» и не теряет params', () => {
+  const wipe = {
+    id: 'wipe',
+    data: {
+      group: 'block',
+      type: 'save',
+      params: { key: '', value: '', values: { name: '', task: '' } },
+    },
+  }
+  const nodes = [trigger, wipe]
+  const edges = [{ id: 'start-wipe', source: 'start', target: 'wipe' }]
+  assert.equal(validateFlow(nodes, edges, 'telegram').ok, true)
+  assert.deepEqual(serializeDefinition(nodes, edges).nodes[0].params, { values: { name: '', task: '' } })
+})
+
+test('save с values-словарём И заполненным «Ключ/Значение» подсвечивает конфликт', () => {
+  const conflicted = {
+    id: 'wipe',
+    data: {
+      group: 'block',
+      type: 'save',
+      params: { key: 'source', value: 'tg', values: { name: '' } },
+    },
+  }
+  const nodes = [trigger, conflicted]
+  const edges = [{ id: 'start-wipe', source: 'start', target: 'wipe' }]
+  const result = validateFlow(nodes, edges, 'telegram')
+  assert.equal(result.ok, false)
+  assert.ok(result.problems.some((problem) => problem.nodeId === 'wipe' && problem.message.includes('values-словарь')))
+})

@@ -15,6 +15,13 @@ class CreateBotRequest(BaseModel):
     token: str = Field(min_length=1, description="Токен уже зарегистрированного бота (BR-002)")
 
 
+class MiniAppInfo(BaseModel):
+    """Привязанная mini app бота (BR-003): редактору нужно знать факт привязки."""
+
+    url: str
+    title: str
+
+
 class BotResponse(BaseModel):
     """Токен наружу не возвращается никогда — только факт его наличия в vault."""
 
@@ -24,6 +31,7 @@ class BotResponse(BaseModel):
     status: str
     flow_id: str | None
     published_flow_version_id: str | None
+    mini_app: MiniAppInfo | None
 
     @classmethod
     def from_domain(cls, bot: Bot) -> BotResponse:
@@ -34,7 +42,18 @@ class BotResponse(BaseModel):
             status=bot.status.value,
             flow_id=bot.flow_id,
             published_flow_version_id=bot.published_flow_version_id,
+            mini_app=(
+                MiniAppInfo(url=bot.mini_app.url, title=bot.mini_app.title)
+                if bot.mini_app is not None
+                else None
+            ),
         )
+
+
+class BotListResponse(BaseModel):
+    """Реестр ботов конструктора («Мои боты»), новые первыми; токенов нет."""
+
+    bots: list[BotResponse]
 
 
 class SaveFlowRequest(BaseModel):

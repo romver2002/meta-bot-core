@@ -24,6 +24,7 @@ from application.use_cases.authenticate_mini_app import AuthenticateMiniAppUseCa
 from application.use_cases.create_bot import CreateBotUseCase
 from application.use_cases.get_bot import GetBotUseCase
 from application.use_cases.get_flow_draft import GetFlowDraftUseCase
+from application.use_cases.list_bots import ListBotsUseCase
 from application.use_cases.process_update import ProcessUpdateUseCase
 from application.use_cases.publish_bot import PublishBotUseCase
 from application.use_cases.purge_expired_sessions import PurgeExpiredSessionsUseCase
@@ -61,6 +62,7 @@ from presentation.providers.admin import (
     get_create_bot_uc,
     get_get_bot_uc,
     get_get_flow_draft_uc,
+    get_list_bots_uc,
     get_publish_bot_uc,
     get_save_flow_draft_uc,
     get_set_connection_secret_uc,
@@ -163,6 +165,7 @@ def create_app() -> FastAPI:
         ),
         get_create_bot_uc: lambda: CreateBotUseCase(bots=bots, token_vault=token_vault),
         get_get_bot_uc: lambda: GetBotUseCase(bots=bots),
+        get_list_bots_uc: lambda: ListBotsUseCase(bots=bots),
         get_save_flow_draft_uc: lambda: SaveFlowDraftUseCase(bots=bots, flows=flows),
         get_get_flow_draft_uc: lambda: GetFlowDraftUseCase(bots=bots, flows=flows),
         get_authenticate_mini_app_uc: lambda: AuthenticateMiniAppUseCase(

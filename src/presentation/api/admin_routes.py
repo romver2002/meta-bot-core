@@ -23,6 +23,7 @@ from application.use_cases.authenticate_mini_app import AuthenticateMiniAppUseCa
 from application.use_cases.create_bot import CreateBotUseCase
 from application.use_cases.get_bot import GetBotUseCase
 from application.use_cases.get_flow_draft import GetFlowDraftUseCase
+from application.use_cases.list_bots import ListBotsUseCase
 from application.use_cases.publish_bot import PublishBotUseCase
 from application.use_cases.save_flow_draft import SaveFlowDraftUseCase
 from application.use_cases.set_connection_secret import SetConnectionSecretUseCase
@@ -41,6 +42,7 @@ from presentation.providers.admin import (
     get_create_bot_uc,
     get_get_bot_uc,
     get_get_flow_draft_uc,
+    get_list_bots_uc,
     get_publish_bot_uc,
     get_save_flow_draft_uc,
     get_set_connection_secret_uc,
@@ -49,6 +51,7 @@ from presentation.providers.admin import (
 )
 from presentation.schemas.admin import (
     AttachMiniAppRequest,
+    BotListResponse,
     BotResponse,
     CreateBotRequest,
     FlowDraftResponse,
@@ -65,7 +68,11 @@ from presentation.schemas.admin import (
 admin = APIRouter()
 
 
-@admin.post("/bots", status_code=status.HTTP_201_CREATED, summary="Создать бота по токену")
+@admin.post(
+    "/bots",
+    status_code=status.HTTP_201_CREATED,
+    summary="Подключить бота по токену (повторный connect возвращает существующего, BR-009)",
+)
 async def create_bot(
     request: CreateBotRequest,
     use_case: Annotated[CreateBotUseCase, Depends(get_create_bot_uc)],
@@ -79,6 +86,14 @@ async def create_bot(
     except BotCreationError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return BotResponse.from_domain(bot)
+
+
+@admin.get("/bots", summary="Реестр ботов конструктора («Мои боты»)")
+async def list_bots(
+    use_case: Annotated[ListBotsUseCase, Depends(get_list_bots_uc)],
+) -> BotListResponse:
+    bots = await use_case.execute()
+    return BotListResponse(bots=[BotResponse.from_domain(bot) for bot in bots])
 
 
 @admin.get("/bots/{bot_id}", summary="Карточка бота")

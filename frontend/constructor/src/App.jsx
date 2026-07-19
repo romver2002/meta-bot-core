@@ -25,6 +25,7 @@ import JsonDrawer from './components/JsonDrawer.jsx'
 import ApiPanel from './components/ApiPanel.jsx'
 import PanelResizeHandle from './components/PanelResizeHandle.jsx'
 import { initialNodes, initialEdges } from './flow/initialFlow.js'
+import { deserializeDefinition, nextNodeIdNumber } from './flow/deserialize.js'
 import { buttonIndexFromHandle, isButtonEdge } from './flow/handles.js'
 import { createBlockSelectionSnapshot, pasteBlockSelectionSnapshot } from './flow/selection.js'
 import { serializeDefinition, validateFlow } from './flow/serialize.js'
@@ -42,6 +43,7 @@ import {
 
 let counter = 100
 
+const DEFAULT_BOT_NAME = 'Новый бот'
 const newId = () => `n${counter++}`
 const newEdgeId = () => `e-${newId()}`
 const initialPaletteOpen = () => (typeof window === 'undefined' ? true : window.innerWidth > 900)
@@ -146,7 +148,7 @@ function Editor() {
   const [nodes, setNodes, applyNodeChanges] = useNodesState(initialNodes)
   const [edges, setEdges, applyEdgeChanges] = useEdgesState(initialPresentationEdges)
   const [platform, setPlatform] = useState('telegram')
-  const [botName, setBotName] = useState('Новый бот')
+  const [botName, setBotName] = useState(DEFAULT_BOT_NAME)
   const [selectedId, setSelectedId] = useState(null)
   const [showJson, setShowJson] = useState(false)
   const [problems, setProblems] = useState(null)
@@ -160,6 +162,8 @@ function Editor() {
   const [graphRevision, setGraphRevision] = useState(0)
   const [savedGraphRevision, setSavedGraphRevision] = useState(null)
   const [savedName, setSavedName] = useState('')
+  // Отправная точка «нечего терять»: ревизия и имя после старта/открытия бота.
+  const [canvasBaseline, setCanvasBaseline] = useState({ revision: 0, name: DEFAULT_BOT_NAME })
   const [botSession, setBotSession] = useState({
     botId: '',
     connectedBotName: '',
@@ -178,8 +182,12 @@ function Editor() {
   const graphRef = useRef({ nodes, edges })
   const reconnectingEdgeRef = useRef(null)
   const clipboardRef = useRef(null)
+  // Источник истины по ревизии: замыкания onOpened могут устареть, пока ответ
+  // сервера в полёте, а ref всегда даёт актуальный следующий номер.
+  const graphRevisionRef = useRef(0)
+  const pendingFitRef = useRef(false)
   graphRef.current = { nodes, edges }
-  const { screenToFlowPosition, setCenter, deleteElements } = useReactFlow()
+  const { screenToFlowPosition, setCenter, deleteElements, fitView } = useReactFlow()
 
   useEffect(() => {
     const onResize = () => setViewportWidth(window.innerWidth)
@@ -217,7 +225,8 @@ function Editor() {
 
   const nodeTypes = useMemo(() => ({ block: BlockNode, trigger: TriggerNode }), [])
   const touchGraph = useCallback(() => {
-    setGraphRevision((current) => current + 1)
+    graphRevisionRef.current += 1
+    setGraphRevision(graphRevisionRef.current)
     setProblems(null)
   }, [])
 
@@ -385,6 +394,12 @@ function Editor() {
     [nodes, selectedId],
   )
   const isDirty = savedGraphRevision === null || savedGraphRevision !== graphRevision || savedName !== botName
+  // «Есть что терять» для подтверждения замены канвы: изменения относительно
+  // последнего сохранения, а до него — относительно старта/открытия бота
+  // (пустая канва после 204 и нетронутый демо-сценарий подтверждения не требуют).
+  const baselineRevision = savedGraphRevision ?? canvasBaseline.revision
+  const baselineName = savedGraphRevision !== null ? savedName : canvasBaseline.name
+  const canvasTouched = graphRevision !== baselineRevision || botName !== baselineName
   const platformLocked = Boolean(botSession.botId)
   const editorStatus = useMemo(() => {
     if (botSession.status === 'published' && !isDirty) {
@@ -669,20 +684,86 @@ function Editor() {
     resizePanel(panel, PANEL_LIMITS[panel].default)
   }, [resizePanel])
 
-  const onConnected = useCallback((bot) => {
+  // Подключение без замены канвы. skippedDraft — серверный черновик, который
+  // пользователь решил не открывать: его row_version нужен, чтобы «Сохранить»
+  // легально перезаписал серверную версию, а не упал в ложный 409.
+  const onConnected = useCallback((bot, skippedDraft = null) => {
     setPlatform(bot.platform)
     setBotName(bot.name)
+    setCanvasBaseline((current) => ({ ...current, name: bot.name }))
     setBotSession((current) => ({
       ...current,
       botId: bot.id,
-      flowId: bot.flow_id || '',
-      rowVersion: null,
+      connectedBotName: bot.name,
+      flowId: skippedDraft?.flow_id || bot.flow_id || '',
+      rowVersion: skippedDraft ? skippedDraft.row_version : null,
       status: bot.status,
-      miniAppAttached: false,
+      miniAppAttached: Boolean(bot.mini_app),
+      miniAppUrl: bot.mini_app?.url || '',
+      miniAppTitle: bot.mini_app?.title || '',
     }))
     setSavedGraphRevision(null)
     setSavedName('')
   }, [])
+
+  // Открытие существующего сценария: канва полностью заменяется данными сервера.
+  // 204 (draft === null) — чистый лист; row_version уходит в botSession, чтобы
+  // первый save не создал новый черновик и не упал с 409.
+  const onOpened = useCallback((bot, draft) => {
+    const openedName = (draft?.name || bot.name || '').trim() || DEFAULT_BOT_NAME
+    let loaded = { nodes: [], edges: [] }
+    if (draft) {
+      const { nodes: loadedNodes, edges: loadedConnections } = deserializeDefinition(draft.definition)
+      loaded = {
+        nodes: loadedNodes,
+        edges: loadedConnections.map((connection) => presentationEdge(connection, loadedNodes)),
+      }
+      counter = Math.max(counter, nextNodeIdNumber(loadedNodes.map((node) => node.id)))
+    }
+    setPlatform(bot.platform)
+    setBotName(openedName)
+    setNodes(loaded.nodes)
+    setEdges(loaded.edges)
+    setSelectedId(null)
+    setSelection({ nodes: [], edges: [] })
+    clearClipboard()
+    // Ревизия — через ref: пользователь мог править канву, пока ответ сервера
+    // был в полёте, и замыкание graphRevision уже отстало. Загруженное
+    // состояние считается сохранённым; после 204 сохранённой версии ещё нет.
+    graphRevisionRef.current += 1
+    const nextRevision = graphRevisionRef.current
+    setGraphRevision(nextRevision)
+    setProblems(null)
+    setSavedGraphRevision(draft ? nextRevision : null)
+    setSavedName(draft ? openedName : '')
+    setCanvasBaseline({ revision: nextRevision, name: openedName })
+    pendingFitRef.current = Boolean(draft)
+    setBotSession((current) => ({
+      ...current,
+      botId: bot.id,
+      connectedBotName: bot.name,
+      flowId: draft?.flow_id || bot.flow_id || '',
+      rowVersion: draft ? draft.row_version : null,
+      status: bot.status,
+      // Карточка бота — источник истины по mini app; поля прошлого бота
+      // (URL, chat ID адресата) не должны применяться к открытому в один клик.
+      miniAppAttached: Boolean(bot.mini_app),
+      miniAppUrl: bot.mini_app?.url || '',
+      miniAppTitle: bot.mini_app?.title || '',
+      notificationChatId: '',
+    }))
+  }, [clearClipboard, setEdges, setNodes])
+
+  // fitView после подстановки загруженных узлов: проп fitView у ReactFlow
+  // срабатывает только на инициализации, а канва могла быть отпанорамирована.
+  useEffect(() => {
+    if (!pendingFitRef.current || nodes.length === 0) return
+    pendingFitRef.current = false
+    const frame = requestAnimationFrame(() => {
+      void fitView({ padding: 0.24, duration: 250 })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [fitView, nodes])
 
   const onSaved = useCallback((saved) => {
     setBotSession((current) => ({ ...current, flowId: saved.flow_id, rowVersion: saved.row_version, status: 'draft' }))
@@ -910,9 +991,11 @@ function Editor() {
                 session={botSession}
                 onSessionChange={setBotSession}
                 onConnected={onConnected}
+                onOpened={onOpened}
                 onSaved={onSaved}
                 onPublished={onPublished}
                 isDirty={isDirty}
+                canvasTouched={canvasTouched}
                 onCheck={onCheck}
               />
             )}

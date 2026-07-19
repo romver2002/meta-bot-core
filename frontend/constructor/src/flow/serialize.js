@@ -104,11 +104,26 @@ export function validateFlow(nodes, edges, platformId, options = {}) {
     const normalized = normalizeParams(node.data.type, node.data.params)
     for (const message of normalized.problems) addProblem(problems, `${nodeLabel(node)}: ${message}`, node.id)
 
+    // Блок save валиден и в форме values-словаря (несколько переменных одним
+    // узлом, в т.ч. стирание ПДн — BR-008, process_update.py); тогда пара
+    // «Ключ/Значение» из каталога не обязательна.
+    const savesValuesMap = node.data.type === 'save'
+      && node.data.params.values !== null
+      && node.data.params.values !== undefined
+      && typeof node.data.params.values === 'object'
+      && !Array.isArray(node.data.params.values)
     for (const field of def.fields || []) {
       if (field.kind === 'buttons') continue
+      if (savesValuesMap && field.key === 'key') continue
       if (field.required && !String(node.data.params[field.key] ?? '').trim()) {
         addProblem(problems, `${nodeLabel(node)}: заполните «${field.label}»`, node.id)
       }
+    }
+    // При values-словаре движок исполняет ТОЛЬКО его (process_update.py):
+    // заполненная рядом пара «Ключ/Значение» молча не исполнилась бы.
+    if (savesValuesMap
+      && (String(node.data.params.key ?? '').trim() || String(node.data.params.value ?? '').trim())) {
+      addProblem(problems, `${nodeLabel(node)}: узел исполняет values-словарь — уберите «Ключ/Значение» или сам словарь`, node.id)
     }
 
     const buttons = Array.isArray(node.data.params.buttons) ? node.data.params.buttons : []
@@ -135,7 +150,10 @@ export function validateFlow(nodes, edges, platformId, options = {}) {
         ))
         if (!visible) addProblem(problems, `${prefix}: добавьте связь на холсте`, node.id)
       }
-      if (button.action === 'callback' && button.target && !callbackPayloads.has(button.target)) {
+      // Callback-кнопка на ask — быстрый ответ: движок сохраняет payload как
+      // ответ пользователя (process_update, «быстрый ответ равноправен
+      // набранному тексту»), вход «Нажатие кнопки» для него не нужен.
+      if (button.action === 'callback' && button.target && node.data.type !== 'ask' && !callbackPayloads.has(button.target)) {
         addProblem(problems, `${prefix}: нет входа «Нажатие кнопки» с payload «${button.target}»`, node.id)
       }
       if ((button.action === 'url' || button.action === 'open_mini_app') && button.target && !button.target.startsWith('https://')) {
@@ -191,7 +209,9 @@ export function normalizeParams(type, params = {}) {
   const def = BLOCK_BY_TYPE[type]
   const result = {}
   const problems = []
+  const catalogKeys = new Set(['buttons'])
   for (const field of def?.fields || []) {
+    catalogKeys.add(field.key)
     if (field.kind === 'buttons') continue
     const raw = params[field.key]
     if (field.kind === 'json') {
@@ -199,12 +219,20 @@ export function normalizeParams(type, params = {}) {
       if (parsed.ok) result[field.key] = parsed.value
       else problems.push(`${field.label}: ${parsed.error}`)
     } else if (field.kind === 'number') {
+      // Пустое поле — отсутствие ключа (у движка свои дефолты), а не Number('') === 0.
+      if (raw === '' || raw === undefined || raw === null) continue
       const value = Number(raw)
       if (Number.isFinite(value)) result[field.key] = value
-      else if (raw !== '' && raw !== undefined && raw !== null) problems.push(`${field.label}: должно быть число`)
+      else problems.push(`${field.label}: должно быть число`)
     } else if (raw !== undefined && raw !== '') {
       result[field.key] = raw
     }
+  }
+  // Движок принимает params шире каталога (например, values у save —
+  // process_update.py). Незнакомые редактору ключи проходят насквозь без
+  // изменений, чтобы сохранение из редактора не теряло данные сценария.
+  for (const [key, value] of Object.entries(params)) {
+    if (!catalogKeys.has(key)) result[key] = value
   }
   return { params: result, problems }
 }

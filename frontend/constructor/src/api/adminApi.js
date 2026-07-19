@@ -78,8 +78,19 @@ export function createBot(baseUrl, payload) {
   })
 }
 
+// Реестр «Мои боты»: {bots: [...]}, новые первыми, токенов в ответе нет.
+export function listBots(baseUrl) {
+  return request(baseUrl, '/api/bots')
+}
+
 export function getBot(baseUrl, botId) {
   return request(baseUrl, `/api/bots/${encodeURIComponent(botId)}`)
+}
+
+// Read-контракт черновика: 200 -> {flow_id, name, definition, row_version};
+// 204 «бот есть, черновика ещё нет» -> null (пустое тело); 404 — бота нет.
+export function getFlowDraft(baseUrl, botId) {
+  return request(baseUrl, `/api/bots/${encodeURIComponent(botId)}/flow`)
 }
 
 export function saveFlowDraft(baseUrl, botId, payload) {

@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.8"
-updated: 2026-07-12
+version: "1.9"
+updated: 2026-07-20
 verified_commit: ""
 owner: "teamlead"
 ---
@@ -92,6 +92,8 @@ owner: "teamlead"
 - [0012-message-edit-in-place.md](decisions/0012-message-edit-in-place.md) — обновление отправленных сообщений: edit-in-place ответа на нажатие (proposed)
 - [0013-structured-logging.md](decisions/0013-structured-logging.md) — структурное логирование и файлы ошибок (proposed)
 - [0014-auto-webhook-registration.md](decisions/0014-auto-webhook-registration.md) — автоматическая регистрация вебхука при публикации (proposed)
+- [0015-flow-open-and-layout.md](decisions/0015-flow-open-and-layout.md) — открытие сценария в редакторе и судьба layout (proposed)
+- [0016-idempotent-bot-connect.md](decisions/0016-idempotent-bot-connect.md) — идемпотентное подключение бота по токену (proposed)
 
 ### workflows/ — процессы под тип задачи (стабильный)
 - [new-feature.md](workflows/new-feature.md) — процесс новой фичи (включая связку со spec-kit)

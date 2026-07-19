@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { ConstructorApiError, createBot, getBot, publishBot } from './adminApi.js'
+import { ConstructorApiError, createBot, getBot, getFlowDraft, publishBot } from './adminApi.js'
 
 function withFetch(stub, run) {
   const originalFetch = globalThis.fetch
@@ -52,6 +52,50 @@ test('keeps not-found details generic instead of exposing an identifier from the
   }), async () => {
     await assert.rejects(
       getBot('', 'private-id-123'),
+      (error) => error instanceof ConstructorApiError
+        && error.status === 404
+        && error.message === 'Запрошенный бот не найден. Возможно, он был удалён в другом сеансе.',
+    )
+  })
+})
+
+test('returns the flow draft payload for the editor (200)', async () => {
+  const draft = {
+    flow_id: 'flow-1',
+    name: 'Заявки',
+    definition: { doc_schema_version: 1, triggers: [], nodes: [], transitions: [] },
+    row_version: 4,
+  }
+  await withFetch(async () => ({
+    ok: true,
+    status: 200,
+    statusText: 'OK',
+    text: async () => JSON.stringify(draft),
+  }), async () => {
+    assert.deepEqual(await getFlowDraft('', 'bot-1'), draft)
+  })
+})
+
+test('returns null when the bot has no draft yet (204 keeps the editor on a clean slate)', async () => {
+  await withFetch(async () => ({
+    ok: true,
+    status: 204,
+    statusText: 'No Content',
+    text: async () => '',
+  }), async () => {
+    assert.equal(await getFlowDraft('', 'bot-1'), null)
+  })
+})
+
+test('flow draft for a missing bot surfaces the generic not-found message', async () => {
+  await withFetch(async () => ({
+    ok: false,
+    status: 404,
+    statusText: 'Not Found',
+    text: async () => JSON.stringify({ detail: 'bot secret-id was not found' }),
+  }), async () => {
+    await assert.rejects(
+      getFlowDraft('', 'secret-id'),
       (error) => error instanceof ConstructorApiError
         && error.status === 404
         && error.message === 'Запрошенный бот не найден. Возможно, он был удалён в другом сеансе.',

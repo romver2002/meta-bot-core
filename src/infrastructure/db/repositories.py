@@ -16,7 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
-from application.errors import ConcurrencyError, FlowNotFoundError
+from application.errors import BotCreationError, ConcurrencyError, FlowNotFoundError
 from application.ports.flow_repository import FlowDraft
 from domain.bot.entities import Bot
 from domain.flow.codec import definition_hash, definition_to_flow, flow_to_definition
@@ -51,22 +51,48 @@ class PgBotRepository:
             model = await db.get(BotModel, key, options=[selectinload(BotModel.mini_app)])
             return mappers.model_to_bot(model) if model is not None else None
 
+    async def find_by_token_fingerprint(self, fingerprint: str) -> Bot | None:
+        async with self._session_factory() as db:
+            result = await db.execute(
+                sa.select(BotModel)
+                .options(selectinload(BotModel.mini_app))
+                .where(BotModel.token_hash == fingerprint)
+            )
+            model = result.scalars().first()
+            return mappers.model_to_bot(model) if model is not None else None
+
+    async def list_all(self) -> list[Bot]:
+        async with self._session_factory() as db:
+            result = await db.execute(
+                sa.select(BotModel)
+                .options(selectinload(BotModel.mini_app))
+                .order_by(BotModel.created_at.desc(), BotModel.id)
+            )
+            return [mappers.model_to_bot(model) for model in result.scalars()]
+
     async def save(self, bot: Bot) -> None:
         # Строка блокируется на время транзакции (FOR UPDATE) — read-modify-write
         # внутри save атомарен. Optimistic lock между get() и save() —
         # зафиксированный долг до появления конкурентных админ-сценариев (IAM).
-        async with self._session_factory() as db, db.begin():
-            model = await db.get(
-                BotModel,
-                uuid.UUID(bot.id),
-                options=[selectinload(BotModel.mini_app)],
-                with_for_update=True,
-            )
-            if model is None:
-                db.add(mappers.bot_to_model(bot))
-            else:
-                mappers.apply_bot_to_model(bot, model)
-                model.row_version += 1
+        try:
+            async with self._session_factory() as db, db.begin():
+                model = await db.get(
+                    BotModel,
+                    uuid.UUID(bot.id),
+                    options=[selectinload(BotModel.mini_app)],
+                    with_for_update=True,
+                )
+                if model is None:
+                    db.add(mappers.bot_to_model(bot))
+                else:
+                    mappers.apply_bot_to_model(bot, model)
+                    model.row_version += 1
+        except IntegrityError as exc:
+            # Гонка двух connect с одним токеном: уникальный индекс token_hash.
+            # Ретрай попадёт в find_by_token_fingerprint и вернёт существующего.
+            raise BotCreationError(
+                "Бот с этим токеном уже подключён — повторите подключение"
+            ) from exc
 
 
 class PgFlowRepository:

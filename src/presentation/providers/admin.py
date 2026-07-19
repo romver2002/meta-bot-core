@@ -7,6 +7,7 @@ from application.use_cases.authenticate_mini_app import AuthenticateMiniAppUseCa
 from application.use_cases.create_bot import CreateBotUseCase
 from application.use_cases.get_bot import GetBotUseCase
 from application.use_cases.get_flow_draft import GetFlowDraftUseCase
+from application.use_cases.list_bots import ListBotsUseCase
 from application.use_cases.publish_bot import PublishBotUseCase
 from application.use_cases.save_flow_draft import SaveFlowDraftUseCase
 from application.use_cases.set_connection_secret import SetConnectionSecretUseCase
@@ -39,6 +40,10 @@ def get_set_notification_target_uc() -> SetNotificationTargetUseCase:
 
 
 def get_get_bot_uc() -> GetBotUseCase:
+    raise NotImplementedError("Провайдер подключается в composition root (src/main.py)")
+
+
+def get_list_bots_uc() -> ListBotsUseCase:
     raise NotImplementedError("Провайдер подключается в composition root (src/main.py)")
 
 

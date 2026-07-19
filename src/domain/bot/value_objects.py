@@ -32,10 +32,14 @@ class Token:
     Сам секрет в домене не хранится, не логируется и не попадает в БД
     в открытом виде: здесь живёт только ссылка ``vault_ref``, по которой
     infrastructure достаёт значение через ``TokenVaultPort``
-    (memory-bank/architecture/security.md).
+    (memory-bank/architecture/security.md), и ``fingerprint`` — односторонний
+    SHA-256-отпечаток секрета для идемпотентного подключения (BR-009,
+    ADR-0016): по нему бот находится повторно, сам токен по отпечатку
+    невосстановим. ``None`` — у ботов, подключённых до введения отпечатка.
     """
 
     vault_ref: str
+    fingerprint: str | None = None
 
     def __post_init__(self) -> None:
         if not self.vault_ref:

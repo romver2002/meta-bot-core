@@ -29,6 +29,13 @@ class FileTokenVault:
             raise KeyError(f"Секрет {vault_ref!r} не найден в token vault")
         return secret
 
+    async def delete(self, vault_ref: str) -> None:
+        data = self._load()
+        if vault_ref not in data:
+            return
+        del data[vault_ref]
+        self._path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
     def _load(self) -> dict[str, str]:
         if not self._path.exists():
             return {}

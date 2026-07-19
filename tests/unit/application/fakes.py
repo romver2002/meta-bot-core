@@ -31,8 +31,18 @@ class InMemoryBotRepository:
     async def get(self, bot_id: str) -> Bot | None:
         return self.storage.get(bot_id)
 
+    async def find_by_token_fingerprint(self, fingerprint: str) -> Bot | None:
+        return next(
+            (bot for bot in self.storage.values() if bot.token.fingerprint == fingerprint),
+            None,
+        )
+
     async def save(self, bot: Bot) -> None:
         self.storage[bot.id] = bot
+
+    async def list_all(self) -> list[Bot]:
+        # Контракт порта: новые первыми (в фейке — обратный порядок вставки).
+        return list(reversed(self.storage.values()))
 
 
 class InMemoryFlowRepository:
@@ -120,6 +130,9 @@ class InMemoryTokenVault:
 
     async def retrieve(self, vault_ref: str) -> str:
         return self.secrets[vault_ref]
+
+    async def delete(self, vault_ref: str) -> None:
+        self.secrets.pop(vault_ref, None)
 
 
 class StubPlatform:

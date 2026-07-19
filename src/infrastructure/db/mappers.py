@@ -38,6 +38,7 @@ def bot_to_model(bot: Bot) -> BotModel:
         name=bot.name,
         platform=bot.platform,
         token_vault_ref=bot.token.vault_ref,
+        token_hash=bot.token.fingerprint,
         status=bot.status,
         flow_id=uuid.UUID(bot.flow_id) if bot.flow_id else None,
         published_flow_version_id=(uuid.UUID(bot.published_flow_version_id) if bot.published_flow_version_id else None),
@@ -51,6 +52,7 @@ def apply_bot_to_model(bot: Bot, model: BotModel) -> None:
     """Переносит состояние агрегата в существующую ORM-строку (кроме id/platform)."""
     model.name = bot.name
     model.token_vault_ref = bot.token.vault_ref
+    model.token_hash = bot.token.fingerprint
     model.status = bot.status
     model.flow_id = uuid.UUID(bot.flow_id) if bot.flow_id else None
     model.published_flow_version_id = (
@@ -87,7 +89,7 @@ def model_to_bot(model: BotModel) -> Bot:
         id=model.id.hex,
         name=model.name,
         platform=model.platform,
-        token=Token(vault_ref=model.token_vault_ref),
+        token=Token(vault_ref=model.token_vault_ref, fingerprint=model.token_hash),
         flow_id=model.flow_id.hex if model.flow_id else None,
         status=model.status,
         mini_app=mini_app,

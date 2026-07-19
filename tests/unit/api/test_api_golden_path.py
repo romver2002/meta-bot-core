@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from application.use_cases.create_bot import CreateBotUseCase
 from application.use_cases.get_bot import GetBotUseCase
 from application.use_cases.get_flow_draft import GetFlowDraftUseCase
+from application.use_cases.list_bots import ListBotsUseCase
 from application.use_cases.process_update import ProcessUpdateUseCase
 from application.use_cases.publish_bot import PublishBotUseCase
 from application.use_cases.save_flow_draft import SaveFlowDraftUseCase
@@ -23,6 +24,7 @@ from presentation.providers.admin import (
     get_create_bot_uc,
     get_get_bot_uc,
     get_get_flow_draft_uc,
+    get_list_bots_uc,
     get_publish_bot_uc,
     get_save_flow_draft_uc,
 )
@@ -63,6 +65,7 @@ def _build_app() -> tuple[FastAPI, StubPlatform, StubIdempotency]:
         {
             get_create_bot_uc: lambda: CreateBotUseCase(bots=bots, token_vault=vault),
             get_get_bot_uc: lambda: GetBotUseCase(bots=bots),
+            get_list_bots_uc: lambda: ListBotsUseCase(bots=bots),
             get_save_flow_draft_uc: lambda: SaveFlowDraftUseCase(bots=bots, flows=flows),
             get_get_flow_draft_uc: lambda: GetFlowDraftUseCase(bots=bots, flows=flows),
             get_publish_bot_uc: lambda: PublishBotUseCase(
@@ -127,6 +130,42 @@ async def test_golden_path_from_create_to_bot_reply() -> None:
         duplicate = await client.post(f"/webhooks/telegram/{bot['id']}", json=_start_update())
         assert duplicate.json()["outcome"] == "duplicate"
         assert len(platform.sent) == 2
+
+
+async def test_connect_same_token_is_idempotent() -> None:
+    """BR-009: повторный POST /bots с тем же токеном возвращает существующего бота."""
+    app, _, _ = _build_app()
+    async with _client(app) as client:
+        payload = {"name": "Кофейня", "platform": "telegram", "token": "same-token"}
+        first = (await client.post("/api/bots", json=payload)).json()
+        second = (await client.post("/api/bots", json=payload)).json()
+
+        assert second["id"] == first["id"]
+        listed = (await client.get("/api/bots")).json()["bots"]
+        assert [bot["id"] for bot in listed] == [first["id"]]
+
+
+async def test_list_bots_returns_registry_newest_first_without_tokens() -> None:
+    app, _, _ = _build_app()
+    async with _client(app) as client:
+        empty = await client.get("/api/bots")
+        assert empty.status_code == 200
+        assert empty.json() == {"bots": []}
+
+        first = (await client.post(
+            "/api/bots", json={"name": "Первый", "platform": "telegram", "token": "t1"},
+        )).json()
+        second = (await client.post(
+            "/api/bots", json={"name": "Второй", "platform": "max", "token": "t2"},
+        )).json()
+
+        listed = await client.get("/api/bots")
+        assert listed.status_code == 200
+        bots = listed.json()["bots"]
+        assert [bot["id"] for bot in bots] == [second["id"], first["id"]]
+        assert bots[0]["platform"] == "max"
+        assert bots[0]["status"] == "draft"
+        assert all("token" not in bot for bot in bots)  # секреты наружу не отдаются
 
 
 async def test_webhook_unknown_bot_is_200_not_processed(caplog) -> None:

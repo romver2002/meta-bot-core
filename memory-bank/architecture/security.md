@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.1"
-updated: 2026-07-12
+version: "1.2"
+updated: 2026-07-20
 verified_commit: ""
 owner: ""
 ---
@@ -25,6 +25,10 @@ init-данные mini app), изоляция пользовательских P
   Где секреты живут и как попадают в приложение —
   [../ops/configuration.md](../ops/configuration.md). Конкретное хранилище
   (Vault / SOPS / секреты CI) — уточнить у команды.
+  Исключение-неисключение: в `bot.token_hash` лежит **односторонний
+  SHA-256-отпечаток** токена для идемпотентного подключения (BR-009,
+  [ADR-0016](../decisions/0016-idempotent-bot-connect.md)) — сам секрет из
+  отпечатка невосстановим, наружу поле не отдаётся (в `BotResponse` его нет).
 - **Секреты подключений к внешним API** (ключи для `{{secret:*}}` в блоке
   `http_request`) задаются endpoint'ом `PUT /api/bots/{bot_id}/connections/{name}`
   (204; 404, если бота нет) и живут за портами `SecretResolverPort` /

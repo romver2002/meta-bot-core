@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.1"
-updated: 2026-07-12
+version: "1.2"
+updated: 2026-07-20
 verified_commit: ""
 owner: "teamlead"
 ---
@@ -26,7 +26,7 @@ owner: "teamlead"
 | Слой | Что содержит | Что запрещено | Пакет в коде |
 |---|---|---|---|
 | domain | сущности (`Bot`, `Flow`, `Node`, `Trigger`, `Button`, `MiniApp`), value objects (`Platform`, `BotStatus`, `Token`), доменные события (`IncomingEvent`, `ButtonClicked`, `MiniAppOpened`), инварианты сценария, доменные ошибки | любые импорты из внешних слоёв; фреймворки, ORM, HTTP, SDK платформ, I/O | `src/domain/` |
-| application | use cases (`ProcessUpdateUseCase`, `CreateBotUseCase`, `GetBotUseCase`, `PublishBotUseCase`, `AttachMiniAppUseCase`, `AuthenticateMiniAppUseCase`, `SubmitMiniAppResultUseCase`, `SaveFlowDraftUseCase`, `GetFlowDraftUseCase`, `PurgeExpiredSessionsUseCase`, `SetConnectionSecretUseCase`, `SetNotificationTargetUseCase`), порты (`BotPlatformPort`, `BotRepository`, `FlowRepository`, `SessionRepository`, `SessionRetentionPort`, `TokenVaultPort`, `CodeExecutorPort` — реализация в плане, `HttpClientPort`, `IdempotencyPort`, `SecretResolverPort`/`ConnectionSecretWriterPort`, `NotificationTargetResolverPort`/`NotificationTargetWriterPort`), DTO границ | знание о конкретной БД/HTTP/SDK; условия `if platform == …`; бизнес-инварианты, дублирующие domain | `src/application/` |
+| application | use cases (`ProcessUpdateUseCase`, `CreateBotUseCase`, `GetBotUseCase`, `PublishBotUseCase`, `AttachMiniAppUseCase`, `AuthenticateMiniAppUseCase`, `SubmitMiniAppResultUseCase`, `SaveFlowDraftUseCase`, `GetFlowDraftUseCase`, `ListBotsUseCase`, `PurgeExpiredSessionsUseCase`, `SetConnectionSecretUseCase`, `SetNotificationTargetUseCase`), порты (`BotPlatformPort`, `BotRepository`, `FlowRepository`, `SessionRepository`, `SessionRetentionPort`, `TokenVaultPort`, `CodeExecutorPort` — реализация в плане, `HttpClientPort`, `IdempotencyPort`, `SecretResolverPort`/`ConnectionSecretWriterPort`, `NotificationTargetResolverPort`/`NotificationTargetWriterPort`), DTO границ | знание о конкретной БД/HTTP/SDK; условия `if platform == …`; бизнес-инварианты, дублирующие domain | `src/application/` |
 | infrastructure | реализации портов: `platforms/telegram/` и `platforms/max/` (adapter.py, mini_app_auth.py, webhook.py), `db/` (модели SQLAlchemy: models.py, repositories.py, mappers.py), `cache/`, `http/`, `integrations/`, `maintenance/`, `observability/`, `security/` (token vault: file_token_vault.py); `code_executor/` (sandbox) — план, [ADR-0003](../decisions/0003-flow-engine-blocks-and-sandbox.md) | бизнес-логика; обращения к presentation; импорт одного платформенного адаптера из другого | `src/infrastructure/` |
 | presentation | FastAPI-роуты: `api/admin_routes.py` (конструктор), `api/webhook_routes.py` (приём вебхуков), схемы запросов/ответов, middleware | бизнес-логика; доступ к БД/адаптерам в обход application | `src/presentation/` |
 

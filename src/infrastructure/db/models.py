@@ -56,6 +56,7 @@ class BotModel(Base):
     name: Mapped[str] = mapped_column(sa.Text, default="")
     platform: Mapped[Platform] = mapped_column(platform_enum)
     token_vault_ref: Mapped[str] = mapped_column(sa.Text)  # хэндл записи в vault, НЕ секрет
+    token_hash: Mapped[str | None] = mapped_column(sa.Text, unique=True)  # SHA-256 токена (BR-009), НЕ секрет
     status: Mapped[BotStatus] = mapped_column(bot_status_enum, default=BotStatus.DRAFT)
     flow_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), unique=True)  # soft-ref, 1—1
     published_flow_version_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))  # soft-ref
