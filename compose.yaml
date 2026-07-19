@@ -68,7 +68,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-metabot}
       POSTGRES_DB: ${POSTGRES_DB:-metabot}
     ports:
-      - "127.0.0.1:5433:5432"  # только loopback; 5432 хоста занят соседним проектом
+      - "127.0.0.1:5434:5432"  # только loopback; 5432 и 5433 хоста заняты соседними проектами (exam/bulsteptech)
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
