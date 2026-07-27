@@ -1,7 +1,7 @@
 ---
 status: draft
-version: "1.8"
-updated: 2026-07-20
+version: "1.9"
+updated: 2026-07-27
 verified_commit: ""
 owner: ""
 ---
@@ -85,7 +85,9 @@ ADR только со статусом `proposed` и сообщает об эт�
 | [0014](0014-auto-webhook-registration.md) | Автоматическая регистрация вебхука при публикации | proposed | 2026-07-12 |
 | [0015](0015-flow-open-and-layout.md) | Открытие сценария в редакторе и судьба layout | proposed | 2026-07-19 |
 | [0016](0016-idempotent-bot-connect.md) | Идемпотентное подключение бота по токену | proposed | 2026-07-20 |
+| [0017](0017-external-event-trigger.md) | Внешний триггер external_event и push-доставка | accepted | 2026-07-26 |
+| [0018](0018-vps-deployment-perimeter.md) | Развёртывание на VPS: публичный периметр и место внешних потребителей | proposed | 2026-07-26 |
 
-ADR-0001, 0002 и 0006 приняты; 0003–0005 и 0007–0016 — черновики на
+ADR-0001, 0002, 0006 и 0017 приняты; 0003–0005, 0007–0016 и 0018 — черновики на
 ратификацию командой: статус `accepted` им проставляет владелец раздела
 ([../_meta/governance.md](../_meta/governance.md)).

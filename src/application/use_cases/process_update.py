@@ -234,6 +234,13 @@ class ProcessUpdateUseCase:
         if route is None:
             return  # нераспознанное событие — сценарий не трогаем
 
+        if event.event_type is TriggerType.EXTERNAL_EVENT and event.variables:
+            # Payload внешнего события → переменные сессии ДО цепочки (ADR-0017):
+            # карточка рисуется обычными {подстановками}. Пишем только после
+            # успешного матчинга — несматченное событие сессию не трогает.
+            for key, value in event.variables.items():
+                session.remember(key, value)
+
         chain_ended = await self._run_chain(flow, route.start_node_id, session, send, send_to, bot.id, mini_app_url)
         if chain_ended:
             # Сценарий дошёл до конца: пара (Bot, user) свободна, следующий
@@ -306,6 +313,12 @@ class ProcessUpdateUseCase:
             if trigger.type is TriggerType.CALLBACK:
                 payload = trigger.config.get("payload")
                 if payload is not None and event.payload != payload:
+                    continue
+            if trigger.type is TriggerType.EXTERNAL_EVENT:
+                # Имя события — в payload (ADR-0017); config["event"] не задан —
+                # триггер ловит любое внешнее событие (симметрия с pattern у text)
+                name = trigger.config.get("event")
+                if name is not None and event.payload != name:
                     continue
             return trigger
         return None

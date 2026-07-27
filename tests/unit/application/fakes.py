@@ -210,6 +210,9 @@ class StubIdempotency:
         self.seen.add(key)
         return True
 
+    async def forget(self, key: str) -> None:
+        self.seen.discard(key)
+
 
 class StubPlatformFactory:
     def __init__(self, platform_port: StubPlatform) -> None:

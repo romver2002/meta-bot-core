@@ -8,13 +8,15 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Path, Response, status
 
 from application.errors import (
     ApplicationError,
     BotCreationError,
     BotNotFoundError,
     ConcurrencyError,
+    ExternalEventAuthError,
+    ExternalEventValidationError,
     FlowNotFoundError,
     MiniAppAuthError,
 )
@@ -27,7 +29,9 @@ from application.use_cases.list_bots import ListBotsUseCase
 from application.use_cases.publish_bot import PublishBotUseCase
 from application.use_cases.save_flow_draft import SaveFlowDraftUseCase
 from application.use_cases.set_connection_secret import SetConnectionSecretUseCase
+from application.use_cases.set_events_token import SetEventsTokenUseCase
 from application.use_cases.set_notification_target import SetNotificationTargetUseCase
+from application.use_cases.submit_external_event import SubmitExternalEventUseCase
 from application.use_cases.submit_mini_app_result import SubmitMiniAppResultUseCase
 from domain.bot.value_objects import Platform
 from domain.errors import (
@@ -46,7 +50,9 @@ from presentation.providers.admin import (
     get_publish_bot_uc,
     get_save_flow_draft_uc,
     get_set_connection_secret_uc,
+    get_set_events_token_uc,
     get_set_notification_target_uc,
+    get_submit_external_event_uc,
     get_submit_mini_app_result_uc,
 )
 from presentation.schemas.admin import (
@@ -54,6 +60,7 @@ from presentation.schemas.admin import (
     BotListResponse,
     BotResponse,
     CreateBotRequest,
+    EventAck,
     FlowDraftResponse,
     MiniAppAuthRequest,
     MiniAppAuthResponse,
@@ -62,7 +69,9 @@ from presentation.schemas.admin import (
     SaveFlowRequest,
     SaveFlowResponse,
     SetConnectionSecretRequest,
+    SetEventsTokenRequest,
     SetNotificationTargetRequest,
+    SubmitEventRequest,
 )
 
 admin = APIRouter()
@@ -238,6 +247,59 @@ async def set_connection_secret(
         await use_case.execute(bot_id, name, request.value)
     except BotNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@admin.put(
+    "/bots/{bot_id}/events-token",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Задать events-токен (аутентификация внешних событий, ADR-0017)",
+)
+async def set_events_token(
+    bot_id: str,
+    request: SetEventsTokenRequest,
+    use_case: Annotated[SetEventsTokenUseCase, Depends(get_set_events_token_uc)],
+) -> None:
+    try:
+        await use_case.execute(bot_id, request.token)
+    except BotNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@admin.post(
+    "/bots/{bot_id}/events",
+    summary="Внешнее событие → сценарий (триггер external_event, BR-010)",
+)
+async def submit_external_event(
+    bot_id: str,
+    request: SubmitEventRequest,
+    use_case: Annotated[SubmitExternalEventUseCase, Depends(get_submit_external_event_uc)],
+    x_events_token: Annotated[str, Header(alias="X-Events-Token")] = "",
+) -> EventAck:
+    try:
+        delivered = await use_case.execute(
+            bot_id,
+            provided_token=x_events_token,
+            event=request.event,
+            role=request.to.role,
+            chat_id=request.to.chat_id,
+            payload=request.payload,
+            event_id=request.event_id,
+        )
+    except ExternalEventAuthError as exc:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    except BotNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ExternalEventValidationError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except ApplicationError as exc:
+        # 502, не 500 — как в publish: запрос вызывающего корректен, отказала
+        # платформа. Живой прогон 2026-07-26: MAX отвечает 404, пока получатель
+        # не открыл диалог с ботом, и это приезжало вызывающему «внутренней
+        # ошибкой сервера» — то есть как повод для бесконечного ретрая, хотя
+        # чинится только действием человека. Порядок except значим: все
+        # перечисленные выше ошибки — наследники ApplicationError.
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    return EventAck(delivered=delivered)
 
 
 @admin.put(

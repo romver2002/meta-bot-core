@@ -21,6 +21,7 @@ from application.ports.bot_platform import (
     RegisterWebhookCommand,
     SendMessageCommand,
 )
+from domain.addressing import address_identity, is_user_address
 from domain.capabilities import CapabilityMatrix
 from domain.events import IncomingEvent
 from domain.flow.entities import Button
@@ -29,6 +30,20 @@ from infrastructure.platforms.capabilities_v1 import ENGINE_V1_CAPABILITIES
 from infrastructure.platforms.max.mini_app_auth import validate_max_init_data
 from infrastructure.platforms.max.webhook import parse_max_update
 from infrastructure.platforms.mini_app_identity import identity_from_init_data
+
+
+def _address_params(address: str) -> dict[str, str]:
+    """Адрес ``user:<id>`` → параметр ``user_id`` (личка по глобальному id).
+
+    chat_id диалога в MAX уникален для пары «пользователь ↔ бот» и снаружи
+    неизвестен — push по chat_id чужого диалога даёт 404 (живой прогон
+    2026-07-26). user_id глобален: реестр ролей для MAX-получателей хранит
+    ``user:<user_id>``; обычные адреса из входящих update — как раньше, chat_id.
+    Сама конвенция — в ``domain/addressing.py`` (ADR-0017).
+    """
+    if is_user_address(address):
+        return {"user_id": address_identity(address)}
+    return {"chat_id": address}
 
 
 def _keyboard_attachment(buttons: tuple[Button, ...]) -> dict[str, Any] | None:
@@ -105,7 +120,7 @@ class MaxBotAdapter:
         try:
             response = await self._client.post(
                 f"{self._base_url}/messages",
-                params={"chat_id": command.external_chat_id},
+                params=_address_params(command.external_chat_id),
                 json=body,
                 headers={"Authorization": command.bot_token},
             )

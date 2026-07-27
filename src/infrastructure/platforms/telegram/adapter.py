@@ -21,6 +21,7 @@ from application.ports.bot_platform import (
     RegisterWebhookCommand,
     SendMessageCommand,
 )
+from domain.addressing import address_identity
 from domain.capabilities import CapabilityMatrix
 from domain.events import IncomingEvent
 from domain.flow.entities import Button
@@ -141,7 +142,11 @@ class TelegramBotAdapter:
             raise ApplicationError(f"Telegram setWebhook отклонён: {description or 'ok=false'}")
 
     async def send_message(self, command: SendMessageCommand) -> None:
-        body: dict[str, Any] = {"chat_id": command.external_chat_id, "text": command.text}
+        # Конвенция адреса «user:<id>» (domain/addressing.py, ADR-0017): в личке
+        # Telegram chat_id совпадает с user_id — префикс просто снимается
+        # (симметрия с MAX, где он превращается в параметр user_id).
+        chat_id = address_identity(command.external_chat_id)
+        body: dict[str, Any] = {"chat_id": chat_id, "text": command.text}
         keyboard = _keyboard(command.buttons)
         if keyboard is not None:
             body["reply_markup"] = keyboard
@@ -160,7 +165,7 @@ class TelegramBotAdapter:
         Правка в идентичное содержимое («message is not modified») — успех.
         """
         body: dict[str, Any] = {
-            "chat_id": command.external_chat_id,
+            "chat_id": address_identity(command.external_chat_id),
             "message_id": _message_id_as_int(command.message_id),
             "text": command.text,
         }
@@ -180,7 +185,7 @@ class TelegramBotAdapter:
     async def delete_message(self, command: DeleteMessageCommand) -> None:
         """deleteMessage: у Telegram лимит давности 48 часов (platform-reference)."""
         body = {
-            "chat_id": command.external_chat_id,
+            "chat_id": address_identity(command.external_chat_id),
             "message_id": _message_id_as_int(command.message_id),
         }
         try:

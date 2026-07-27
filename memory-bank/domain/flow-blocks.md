@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.3"
-updated: 2026-07-12
+version: "1.4"
+updated: 2026-07-27
 verified_commit: ""
 owner: ""
 ---
@@ -31,6 +31,7 @@ ADR [0003](../decisions/0003-flow-engine-blocks-and-sandbox.md). Почему б
 | `text` | входящее текстовое сообщение: точное равенство `config["pattern"]`; если `pattern` не задан — любой текст (регэкспов/паттернов нет) | текст |
 | `callback` | нажатие inline-кнопки (`ButtonClicked`) | payload кнопки |
 | `mini_app_result` | mini app вернул результат (`MiniAppOpened` → результат) | данные из mini app (после валидации init data, BR-007) |
+| `external_event` | внешняя система прислала событие: `POST /api/bots/{id}/events` с bot-scoped events-токеном (ADR [0017](../decisions/0017-external-event-trigger.md), BR-010); матчинг — точное равенство `config["event"]`, не задан — любое событие | payload-словарь → переменные сессии; v1 — только личные чаты (`user_id = chat_id`) |
 
 Инвариант публикации: у `Flow` есть хотя бы один входной `Trigger` (BR-001).
 

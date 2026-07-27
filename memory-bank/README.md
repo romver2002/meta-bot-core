@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.9"
-updated: 2026-07-20
+version: "1.10"
+updated: 2026-07-27
 verified_commit: ""
 owner: "teamlead"
 ---
@@ -94,6 +94,8 @@ owner: "teamlead"
 - [0014-auto-webhook-registration.md](decisions/0014-auto-webhook-registration.md) — автоматическая регистрация вебхука при публикации (proposed)
 - [0015-flow-open-and-layout.md](decisions/0015-flow-open-and-layout.md) — открытие сценария в редакторе и судьба layout (proposed)
 - [0016-idempotent-bot-connect.md](decisions/0016-idempotent-bot-connect.md) — идемпотентное подключение бота по токену (proposed)
+- [0017-external-event-trigger.md](decisions/0017-external-event-trigger.md) — внешний триггер external_event и push-доставка (accepted)
+- [0018-vps-deployment-perimeter.md](decisions/0018-vps-deployment-perimeter.md) — развёртывание на VPS: публичный периметр и место внешних потребителей (proposed)
 
 ### workflows/ — процессы под тип задачи (стабильный)
 - [new-feature.md](workflows/new-feature.md) — процесс новой фичи (включая связку со spec-kit)

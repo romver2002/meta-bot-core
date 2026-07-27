@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.5"
-updated: 2026-07-12
+version: "1.6"
+updated: 2026-07-27
 verified_commit: ""
 owner: ""
 ---
@@ -53,6 +53,7 @@ owner: ""
 | `TOKEN_VAULT_FILE` | путь к файловому dev-vault токенов ботов за `TokenVaultPort` (`infrastructure/security/file_token_vault.py`); **путь — не секрет, содержимое файла — секрет** (`.secrets/` в `.gitignore`); прод-хранилище — открытый вопрос | local: `.env` / дефолт в коде | нет | `.secrets/token-vault.json` |
 | `CONNECTION_SECRETS_FILE` | путь к файлу секретов подключений интеграций (`FileConnectionSecrets`); путь — не секрет, содержимое — секрет | local: `.env` / дефолт в коде | нет | `.secrets/connections.json` |
 | `NOTIFICATION_TARGETS_FILE` | путь к файлу привязок «роль → chat_id» для уведомлений (ADR-0010, `FileNotificationTargets`); путь — не секрет, содержимое (потенциальные ПДн) — секрет | local: `.env` / дефолт в коде | нет | `.secrets/notification-targets.json` |
+| `EVENTS_TOKENS_FILE` | путь к файлу events-токенов (ADR-0017, `FileEventsTokens`) — аутентификация `POST /bots/{id}/events`; отдельный от connections.json, `{{secret:*}}` его не видит (BR-010) | local: `.env` / дефолт в коде | нет | `.secrets/events-tokens.json` |
 | `MAX_CA_BUNDLE` | путь к доп. корневому CA (сертификат Минцифры), которому доверяет **только** SSL-контекст MAX-адаптера (`infrastructure/platforms/max/tls.py`); нужен для TLS к `platform-api2.max.ru`. В глобальный `certifi` НЕ добавляется — доверие сужено (не весь исходящий трафик). Файла нет → MAX-клиент на дефолтном доверии | local: дефолт в коде; образ кладёт cert в `ops/certs/` | нет | `ops/certs/russian_trusted_root_ca.pem` |
 | `PROJECT_NAME` | имя сервиса — отдаётся healthcheck'ом, по нему ищется версия пакета (`GetHealthcheckUseCase`) | local: дефолт в коде | нет | `meta-bot-core` |
 | `PUBLIC_URL` | публичный URL сервиса (отдаётся healthcheck'ом) | local: дефолт в коде; stage/prod: переменные CI/CD | нет | `http://localhost:8000` |

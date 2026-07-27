@@ -31,6 +31,9 @@ class TriggerType(enum.StrEnum):
     TEXT = "text"
     CALLBACK = "callback"
     MINI_APP_RESULT = "mini_app_result"
+    # Системный вход «внешняя система → сценарий» (ADR-0017, BR-010):
+    # POST /api/bots/{id}/events; матчинг — по точному имени события в config["event"]
+    EXTERNAL_EVENT = "external_event"
 
 
 class ButtonAction(enum.StrEnum):

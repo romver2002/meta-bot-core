@@ -23,3 +23,6 @@ class RedisIdempotency:
 
     async def first_time(self, key: str) -> bool:
         return bool(await self._client.set(key, "1", nx=True, ex=self._ttl))
+
+    async def forget(self, key: str) -> None:
+        await self._client.delete(key)

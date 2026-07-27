@@ -15,7 +15,13 @@ from infrastructure.db.models import Base
 
 config = context.config
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False обязателен: по умолчанию fileConfig глушит
+    # ВСЕ уже созданные логгеры, которых нет в alembic.ini, — то есть все наши
+    # app.*. Когда миграции гонятся в одном процессе с приложением (фикстура
+    # интеграционных тестов, разовый прогон из кода), после апгрейда приложение
+    # молча перестаёт логировать. Alembic'у нужны свои логгеры, а не тишина
+    # у чужих.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 

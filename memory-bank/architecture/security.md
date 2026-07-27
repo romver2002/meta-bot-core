@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.2"
-updated: 2026-07-20
+version: "1.3"
+updated: 2026-07-27
 verified_commit: ""
 owner: ""
 ---
@@ -37,6 +37,13 @@ init-данные mini app), изоляция пользовательских P
   `.secrets/connections.json` (`FileConnectionSecrets`,
   `infrastructure/security/`); прод-хранилище — тот же открытый вопрос,
   что и у token vault.
+- **Events-токены (ADR-0017, BR-010)** — аутентификация входа внешних событий
+  `POST /api/bots/{id}/events` (заголовок `X-Events-Token`, сравнение
+  `hmac.compare_digest` ДО чтения бота). Хранилище **намеренно отдельное** от
+  секретов подключений (`EventsTokenPort` → `.secrets/events-tokens.json`,
+  `FileEventsTokens`): connections.json резолвится движком в `{{secret:*}}`
+  блока `http_request`, и входной токен оттуда мог бы увести автор сценария
+  исходящим запросом. Задаётся `PUT /api/bots/{bot_id}/events-token`.
 - **MAX: токен передаётся в заголовке `Authorization`, не в query-строке** —
   иначе он оседает в логах прокси и access-логах. Это ответственность
   `MaxBotAdapter` (`infrastructure/platforms/max/`), не бизнес-логики.

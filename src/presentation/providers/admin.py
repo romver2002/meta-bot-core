@@ -11,7 +11,9 @@ from application.use_cases.list_bots import ListBotsUseCase
 from application.use_cases.publish_bot import PublishBotUseCase
 from application.use_cases.save_flow_draft import SaveFlowDraftUseCase
 from application.use_cases.set_connection_secret import SetConnectionSecretUseCase
+from application.use_cases.set_events_token import SetEventsTokenUseCase
 from application.use_cases.set_notification_target import SetNotificationTargetUseCase
+from application.use_cases.submit_external_event import SubmitExternalEventUseCase
 from application.use_cases.submit_mini_app_result import SubmitMiniAppResultUseCase
 
 
@@ -56,4 +58,12 @@ def get_get_flow_draft_uc() -> GetFlowDraftUseCase:
 
 
 def get_publish_bot_uc() -> PublishBotUseCase:
+    raise NotImplementedError("Провайдер подключается в composition root (src/main.py)")
+
+
+def get_set_events_token_uc() -> SetEventsTokenUseCase:
+    raise NotImplementedError("Провайдер подключается в composition root (src/main.py)")
+
+
+def get_submit_external_event_uc() -> SubmitExternalEventUseCase:
     raise NotImplementedError("Провайдер подключается в composition root (src/main.py)")

@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     token_vault_file: str = ".secrets/token-vault.json"  # noqa: S105 — путь к файлу, не пароль
     connection_secrets_file: str = ".secrets/connections.json"
     notification_targets_file: str = ".secrets/notification-targets.json"
+    # Events-токены (ADR-0017) — ОТДЕЛЬНЫЙ файл от connections.json: тот
+    # резолвится {{secret:*}} в http_request, этот — только вход POST /events
+    events_tokens_file: str = ".secrets/events-tokens.json"
     # Доп. корневой CA для доверия ТОЛЬКО в MAX-адаптере (сертификат Минцифры):
     # platform-api2.max.ru отдаёт цепочку под этот корень, которого нет в certifi.
     # Пусто/файла нет — MAX-клиент на дефолтном доверии (TLS к MAX упадёт).

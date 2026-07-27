@@ -30,7 +30,9 @@ from application.use_cases.publish_bot import PublishBotUseCase
 from application.use_cases.purge_expired_sessions import PurgeExpiredSessionsUseCase
 from application.use_cases.save_flow_draft import SaveFlowDraftUseCase
 from application.use_cases.set_connection_secret import SetConnectionSecretUseCase
+from application.use_cases.set_events_token import SetEventsTokenUseCase
 from application.use_cases.set_notification_target import SetNotificationTargetUseCase
+from application.use_cases.submit_external_event import SubmitExternalEventUseCase
 from application.use_cases.submit_mini_app_result import SubmitMiniAppResultUseCase
 from domain.bot.value_objects import Platform
 from infrastructure.cache.redis_idempotency import RedisIdempotency
@@ -49,6 +51,7 @@ from infrastructure.platforms.max.adapter import MaxBotAdapter
 from infrastructure.platforms.max.tls import build_max_http_client
 from infrastructure.platforms.telegram.adapter import TelegramBotAdapter
 from infrastructure.security.file_connection_secrets import FileConnectionSecrets
+from infrastructure.security.file_events_tokens import FileEventsTokens
 from infrastructure.security.file_notification_targets import FileNotificationTargets
 from infrastructure.security.file_token_vault import FileTokenVault
 from presentation.api.admin_routes import admin
@@ -66,7 +69,9 @@ from presentation.providers.admin import (
     get_publish_bot_uc,
     get_save_flow_draft_uc,
     get_set_connection_secret_uc,
+    get_set_events_token_uc,
     get_set_notification_target_uc,
+    get_submit_external_event_uc,
     get_submit_mini_app_result_uc,
 )
 from presentation.providers.system import get_healthcheck_uc, get_services_healthcheck_uc
@@ -119,6 +124,7 @@ def create_app() -> FastAPI:
     idempotency = RedisIdempotency.from_settings(settings)
     connection_secrets = FileConnectionSecrets(settings.connection_secrets_file)
     notification_targets = FileNotificationTargets(settings.notification_targets_file)
+    events_tokens = FileEventsTokens(settings.events_tokens_file)
     process_update = ProcessUpdateUseCase(
         bots=bots,
         flows=flows,
@@ -174,6 +180,14 @@ def create_app() -> FastAPI:
         get_attach_mini_app_uc: lambda: AttachMiniAppUseCase(bots=bots),
         get_set_connection_secret_uc: lambda: SetConnectionSecretUseCase(bots=bots, secrets=connection_secrets),
         get_set_notification_target_uc: lambda: SetNotificationTargetUseCase(bots=bots, targets=notification_targets),
+        get_set_events_token_uc: lambda: SetEventsTokenUseCase(bots=bots, tokens=events_tokens),
+        get_submit_external_event_uc: lambda: SubmitExternalEventUseCase(
+            bots=bots,
+            events_tokens=events_tokens,
+            targets=notification_targets,
+            idempotency=idempotency,
+            process_update=process_update,
+        ),
         get_submit_mini_app_result_uc: lambda: SubmitMiniAppResultUseCase(
             bots=bots,
             token_vault=token_vault,

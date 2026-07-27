@@ -13,3 +13,9 @@ class IdempotencyPort(Protocol):
     """Отвечает на вопрос «этот ключ виден впервые?» атомарно."""
 
     async def first_time(self, key: str) -> bool: ...
+
+    async def forget(self, key: str) -> None:
+        """Компенсация: освобождает ключ, когда обработка после first_time
+        упала — ретрай вызывающего с тем же ключом должен пройти (ADR-0017).
+        """
+        ...

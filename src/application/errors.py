@@ -27,3 +27,11 @@ class FlowExecutionError(ApplicationError):
 
 class MiniAppAuthError(ApplicationError):
     """Init data mini app не прошла валидацию на backend (BR-007)."""
+
+
+class ExternalEventAuthError(ApplicationError):
+    """Внешнее событие без корректного events-токена (ADR-0017, BR-010)."""
+
+
+class ExternalEventValidationError(ApplicationError):
+    """Внешнее событие сформировано неверно (адресат, ключи payload)."""

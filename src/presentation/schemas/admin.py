@@ -107,3 +107,29 @@ class SetConnectionSecretRequest(BaseModel):
 
 class SetNotificationTargetRequest(BaseModel):
     chat_id: str = Field(min_length=1, max_length=128, description="external_chat_id адресата роли (ADR-0010)")
+
+
+class SetEventsTokenRequest(BaseModel):
+    token: str = Field(
+        min_length=16,
+        max_length=256,
+        description="Bot-scoped токен входа внешних событий (ADR-0017); хранится отдельно от секретов подключений",
+    )
+
+
+class EventTargetRequest(BaseModel):
+    """Адресат события: ровно одно из role / chat_id (v1 — только личные чаты)."""
+
+    role: str | None = Field(default=None, min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.-]+$")
+    chat_id: str | None = Field(default=None, min_length=1, max_length=128)
+
+
+class SubmitEventRequest(BaseModel):
+    event: str = Field(min_length=1, max_length=64, description="Имя события — матчится с config[event] триггера external_event")
+    to: EventTargetRequest
+    payload: dict[str, str] = Field(default_factory=dict, description="Плоский словарь → переменные сессии (BR-010)")
+    event_id: str | None = Field(default=None, min_length=1, max_length=128, description="Ключ идемпотентности ретраев вызывающего")
+
+
+class EventAck(BaseModel):
+    delivered: bool = Field(description="False — дубль по event_id, событие уже доставлялось")

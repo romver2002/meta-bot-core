@@ -29,6 +29,9 @@ ENGINE_V1_CAPABILITIES = CapabilityMatrix(
             TriggerType.TEXT,
             TriggerType.CALLBACK,
             TriggerType.MINI_APP_RESULT,
+            # Платформонезависим: доставка идёт обычными send_message цепочки
+            # (ADR-0017) — доступен и Telegram, и MAX
+            TriggerType.EXTERNAL_EVENT,
         }
     ),
     button_actions=frozenset({ButtonAction.NEXT, ButtonAction.CALLBACK, ButtonAction.URL, ButtonAction.OPEN_MINI_APP}),
