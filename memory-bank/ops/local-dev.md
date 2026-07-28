@@ -1,7 +1,7 @@
 ---
 status: active
-version: "1.5"
-updated: 2026-07-12
+version: "1.6"
+updated: 2026-07-28
 verified_commit: ""
 owner: ""
 ---
@@ -121,6 +121,36 @@ Vite поднимается на `http://127.0.0.1:5174` и проксирует
   `platform-api.max.ru` не использовался), токен — в заголовке `Authorization`,
   не в query.
 
+### Туннель направляем на периметр, а не на приложение
+
+**Туннель прямо на `:8000` открывать нельзя.** Он публикует весь origin, а Admin
+API пока без аутентификации — наружу уедут `POST /api/bots` (подключить свой
+токен), `GET /api/bots/{id}/flow` (прочитать сценарий), `PUT /events-token` и
+`PUT /notifications/{role}` (увести доставку). Это не утечка, а захват всех
+ботов инстанса — риск №1 в
+[ADR-0018](../decisions/0018-vps-deployment-perimeter.md).
+
+Между туннелем и ядром ставится `scripts/dev_perimeter_proxy.py` — тот же
+allowlist, который ADR-0018 предписывает reverse-proxy на VPS: наружу проходят
+только `POST /webhooks/{platform}/{bot_id}` и два рантайм-пути mini app,
+остальное получает 404, не доходя до приложения.
+
+```bash
+uv run python scripts/dev_perimeter_proxy.py          # 127.0.0.1:8080 → :8000
+./cloudflared.exe tunnel --url http://localhost:8080  # наружу — только периметр
+```
+
+Периметр проверяется **запросом снаружи после каждой правки**, а не по памяти
+(ADR-0018, «Риски»):
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" https://<туннель>/api/bots   # ждём 404
+```
+
+Добавили новый **рантайм**-эндпоинт — впишите его в `ALLOWED`, иначе снаружи он
+молча недоступен; тест `tests/unit/ops/test_dev_perimeter_proxy.py` намеренно
+падает при изменении списка, чтобы расширение периметра было решением.
+
 Регистрация webhook и отправка сообщений живым ботам — это **реальные вызовы Bot
 API** Telegram/MAX: закрыты флагом `policy_external_api_calls` (`ask`) в
 [../_meta/policy.md](../_meta/policy.md). Агент выполняет их только по явной просьбе
@@ -191,7 +221,7 @@ python scripts/clean.py --dry-run  # показать, что удалит, ни
 |---|---|---|
 | `connection refused` к БД/Redis при старте | Контейнер ещё не готов, приложение стартовало раньше | Дождаться healthy: `docker compose ps`; перезапустить uvicorn |
 | `ModuleNotFoundError: domain/application/...` | `src/` не в `PYTHONPATH` | `export PYTHONPATH=src` или запуск через `uv run` (editable-установка) |
-| Порт 5432 занят другим Postgres | На машине уже работает чужой Postgres | Наш проброшен на `localhost:5433` (compose), менять ничего не нужно |
+| Порт 5432 занят другим Postgres | На машине уже работает чужой Postgres | Наш проброшен на `localhost:5434` (compose), менять ничего не нужно |
 | Telegram: webhook не регистрируется / бот не отвечает через туннель | Публичный порт не 443/80/88/8443, либо активен long polling (`getUpdates` конфликтует с webhook) | Использовать туннель на 443; отключить long polling, оставить один режим |
 | MAX: 401/404 на запросах Bot API | Токен передан в query вместо заголовка, либо base_url вручную переопределён на старый `platform-api.max.ru` | Токен — в заголовке `Authorization`; хост — `platform-api2.max.ru` (дефолт адаптера, не переопределять) |
 | `lint-imports` красный после правки `src/` | Протечка слоя (импорт наружу / между платформами) | Чинить разворотом зависимости за порт, не глушить линтер ([../../.claude/rules/clean-architecture.md](../../.claude/rules/clean-architecture.md)) |
