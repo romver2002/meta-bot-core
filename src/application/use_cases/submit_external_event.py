@@ -83,7 +83,9 @@ class SubmitExternalEventUseCase:
         if role is not None:
             chat_id = await self._targets.resolve(bot_id, role)
             if chat_id is None:
-                raise ExternalEventValidationError(f"Роль {role!r} не привязана к чату (PUT /bots/{{id}}/notifications/{role})")
+                raise ExternalEventValidationError(
+                    f"Роль {role!r} не привязана к чату (PUT /bots/{{id}}/notifications/{role})"
+                )
 
         idempotency_key = f"events:{bot_id}:{event_id}" if event_id is not None else None
         if idempotency_key is not None and not await self._idempotency.first_time(idempotency_key):

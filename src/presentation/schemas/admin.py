@@ -43,9 +43,7 @@ class BotResponse(BaseModel):
             flow_id=bot.flow_id,
             published_flow_version_id=bot.published_flow_version_id,
             mini_app=(
-                MiniAppInfo(url=bot.mini_app.url, title=bot.mini_app.title)
-                if bot.mini_app is not None
-                else None
+                MiniAppInfo(url=bot.mini_app.url, title=bot.mini_app.title) if bot.mini_app is not None else None
             ),
         )
 
@@ -125,10 +123,14 @@ class EventTargetRequest(BaseModel):
 
 
 class SubmitEventRequest(BaseModel):
-    event: str = Field(min_length=1, max_length=64, description="Имя события — матчится с config[event] триггера external_event")
+    event: str = Field(
+        min_length=1, max_length=64, description="Имя события — матчится с config[event] триггера external_event"
+    )
     to: EventTargetRequest
     payload: dict[str, str] = Field(default_factory=dict, description="Плоский словарь → переменные сессии (BR-010)")
-    event_id: str | None = Field(default=None, min_length=1, max_length=128, description="Ключ идемпотентности ретраев вызывающего")
+    event_id: str | None = Field(
+        default=None, min_length=1, max_length=128, description="Ключ идемпотентности ретраев вызывающего"
+    )
 
 
 class EventAck(BaseModel):

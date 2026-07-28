@@ -54,9 +54,7 @@ class PgBotRepository:
     async def find_by_token_fingerprint(self, fingerprint: str) -> Bot | None:
         async with self._session_factory() as db:
             result = await db.execute(
-                sa.select(BotModel)
-                .options(selectinload(BotModel.mini_app))
-                .where(BotModel.token_hash == fingerprint)
+                sa.select(BotModel).options(selectinload(BotModel.mini_app)).where(BotModel.token_hash == fingerprint)
             )
             model = result.scalars().first()
             return mappers.model_to_bot(model) if model is not None else None
@@ -90,9 +88,7 @@ class PgBotRepository:
         except IntegrityError as exc:
             # Гонка двух connect с одним токеном: уникальный индекс token_hash.
             # Ретрай попадёт в find_by_token_fingerprint и вернёт существующего.
-            raise BotCreationError(
-                "Бот с этим токеном уже подключён — повторите подключение"
-            ) from exc
+            raise BotCreationError("Бот с этим токеном уже подключён — повторите подключение") from exc
 
 
 class PgFlowRepository:

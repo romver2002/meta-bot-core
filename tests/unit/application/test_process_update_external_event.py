@@ -64,7 +64,9 @@ async def _engine(flow: Flow) -> tuple[ProcessUpdateUseCase, StubPlatform, InMem
     bot.status = BotStatus.PUBLISHED
     bot.published_flow_version_id = "v1"
     await bots.save(bot)
-    flows.versions["v1"] = FlowVersion(id="v1", flow_id=flow.id, status=FlowVersionStatus.PUBLISHED, flow=flow, version=1)
+    flows.versions["v1"] = FlowVersion(
+        id="v1", flow_id=flow.id, status=FlowVersionStatus.PUBLISHED, flow=flow, version=1
+    )
     use_case = ProcessUpdateUseCase(
         bots=bots,
         flows=flows,

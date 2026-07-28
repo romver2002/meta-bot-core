@@ -152,12 +152,18 @@ async def test_list_bots_returns_registry_newest_first_without_tokens() -> None:
         assert empty.status_code == 200
         assert empty.json() == {"bots": []}
 
-        first = (await client.post(
-            "/api/bots", json={"name": "Первый", "platform": "telegram", "token": "t1"},
-        )).json()
-        second = (await client.post(
-            "/api/bots", json={"name": "Второй", "platform": "max", "token": "t2"},
-        )).json()
+        first = (
+            await client.post(
+                "/api/bots",
+                json={"name": "Первый", "platform": "telegram", "token": "t1"},
+            )
+        ).json()
+        second = (
+            await client.post(
+                "/api/bots",
+                json={"name": "Второй", "platform": "max", "token": "t2"},
+            )
+        ).json()
 
         listed = await client.get("/api/bots")
         assert listed.status_code == 200

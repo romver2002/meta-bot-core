@@ -83,9 +83,7 @@ async def test_platform_refusal_is_502_not_500() -> None:
         (ExternalEventValidationError("роль не привязана"), 422),
     ],
 )
-async def test_specific_errors_keep_their_codes_under_the_502_branch(
-    error: Exception, expected_status: int
-) -> None:
+async def test_specific_errors_keep_their_codes_under_the_502_branch(error: Exception, expected_status: int) -> None:
     """Все три — наследники ApplicationError: порядок except в роуте значим.
 
     Если ветку 502 однажды поднимут выше, 401/404/422 молча схлопнутся в 502,

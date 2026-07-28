@@ -142,9 +142,7 @@ async def test_list_all_returns_newest_first_with_mini_app(session_factory) -> N
     base = datetime.datetime.now(tz=datetime.UTC)
     async with session_factory() as db, db.begin():
         for bot_id, created in ((older.id, base - datetime.timedelta(days=1)), (newer.id, base)):
-            await db.execute(
-                sa.update(BotModel).where(BotModel.id == uuid.UUID(bot_id)).values(created_at=created)
-            )
+            await db.execute(sa.update(BotModel).where(BotModel.id == uuid.UUID(bot_id)).values(created_at=created))
 
     listed = await repo.list_all()
     assert [bot.id for bot in listed] == [newer.id, older.id]
