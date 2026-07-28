@@ -25,12 +25,23 @@ mini app из браузера (BR-007). «Закрыть /api» — слома�
 
 Запуск::
 
-    uv run python scripts/dev_perimeter_proxy.py            # 127.0.0.1:8080 → :8000
-    ./cloudflared.exe tunnel --url http://localhost:8080    # наружу — только вебхуки
+    uv run python scripts/dev_perimeter_proxy.py            # 127.0.0.1:8001 → :8000
+    ./cloudflared.exe tunnel --url http://localhost:8001    # наружу — только вебхуки
+
+Порт по умолчанию — 8001, рядом с ядром (8000), а не 8080: на машине с
+несколькими проектами 8080 обычно уже занят, и bind падает с `WinError 10013`.
+Хуже молчаливого падения то, что туннель тогда уедет на **чужой** сервис, —
+поэтому порт свой, а не «общепринятый».
 
 Проверка периметра (обязательна после каждой правки, ADR-0018 «Риски»)::
 
-    curl -s -o /dev/null -w "%{http_code}\n" https://<туннель>/api/bots   # ждём 404
+    curl -s -o /dev/null -w "%{http_code}\n" https://<туннель>/api/bots            # ждём 404
+    curl -s -o /dev/null -w "%{http_code}\n" -X POST https://<туннель>/webhooks/max/<id>
+
+Второй запрос обязателен: «всё отдаёт 404» — это и правильно настроенный
+периметр, и туннель, случайно уехавший на чужой сервис. Разрешённый путь
+должен вернуть ответ **приложения** (для несуществующего бота — 404 с телом
+ядра, для живого — 200), а не глухой отказ периметра.
 """
 
 from __future__ import annotations
@@ -61,9 +72,7 @@ ALLOWED: dict[str, tuple[re.Pattern[str], ...]] = {
     ),
     # Предполётный запрос браузера к тем же путям mini app: без него
     # POST из браузера не состоится. Тела не несёт, управлять ничем не может.
-    "OPTIONS": (
-        re.compile(rf"^/api/bots/{_ID}/miniapp/(?:auth|result)$"),
-    ),
+    "OPTIONS": (re.compile(rf"^/api/bots/{_ID}/miniapp/(?:auth|result)$"),),
 }
 
 #: Заголовки соединения — их нельзя переносить между двумя разными соединениями.
@@ -160,7 +169,7 @@ class PerimeterHandler(BaseHTTPRequestHandler):
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Периметр dev-контура: наружу только вебхуки и mini app")
-    parser.add_argument("--port", type=int, default=8080, help="порт периметра (его и отдаём туннелю)")
+    parser.add_argument("--port", type=int, default=8001, help="порт периметра (его и отдаём туннелю)")
     parser.add_argument("--host", default="127.0.0.1", help="интерфейс периметра")
     parser.add_argument("--upstream", default="http://127.0.0.1:8000", help="адрес ядра")
     args = parser.parse_args(argv)
