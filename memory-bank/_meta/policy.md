@@ -5,7 +5,7 @@ updated: 2026-07-06
 verified_commit: ""
 owner: "teamlead"
 policy_commit: ask
-policy_push: never
+policy_push: ask
 policy_pr_create: never
 policy_prod_commands: never
 policy_dependency_add: ask
