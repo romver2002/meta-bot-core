@@ -96,6 +96,7 @@ owner: "teamlead"
 - [0016-idempotent-bot-connect.md](decisions/0016-idempotent-bot-connect.md) — идемпотентное подключение бота по токену (proposed)
 - [0017-external-event-trigger.md](decisions/0017-external-event-trigger.md) — внешний триггер external_event и push-доставка (accepted)
 - [0018-vps-deployment-perimeter.md](decisions/0018-vps-deployment-perimeter.md) — развёртывание на VPS: публичный периметр и место внешних потребителей (proposed)
+- [0019-external-event-delivery-contract.md](decisions/0019-external-event-delivery-contract.md) — честный исход `POST /events` и жизненный цикл ключа идемпотентности (proposed)
 
 ### workflows/ — процессы под тип задачи (стабильный)
 - [new-feature.md](workflows/new-feature.md) — процесс новой фичи (включая связку со spec-kit)

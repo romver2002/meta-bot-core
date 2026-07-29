@@ -6,6 +6,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from application.use_cases.process_update import UpdateOutcome
+from application.use_cases.submit_external_event import ExternalEventOutcome
 from domain.bot.entities import Bot
 
 
@@ -133,5 +135,16 @@ class SubmitEventRequest(BaseModel):
     )
 
 
+class MiniAppResultAck(BaseModel):
+    """Исход подачи результата mini app в сценарий (BR-012): ok=true только при исполнении."""
+
+    ok: bool = Field(description="True только когда сценарий реально исполнил mini_app_result")
+    outcome: UpdateOutcome = Field(description="Что сделал движок: executed/bot_not_published/...")
+
+
 class EventAck(BaseModel):
-    delivered: bool = Field(description="False — дубль по event_id, событие уже доставлялось")
+    """Честный исход приёма события (ADR-0019): 200 — только доставка или дубль."""
+
+    delivered: bool = Field(description="True только когда сценарий реально исполнил событие")
+    outcome: ExternalEventOutcome = Field(description="Что произошло: delivered/duplicate/in_flight/...")
+    retriable: bool = Field(description="True — повторить тот же event_id позже; False — ретрай бесполезен")

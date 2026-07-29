@@ -26,12 +26,13 @@ from application.use_cases.create_bot import CreateBotUseCase
 from application.use_cases.get_bot import GetBotUseCase
 from application.use_cases.get_flow_draft import GetFlowDraftUseCase
 from application.use_cases.list_bots import ListBotsUseCase
+from application.use_cases.process_update import UpdateOutcome
 from application.use_cases.publish_bot import PublishBotUseCase
 from application.use_cases.save_flow_draft import SaveFlowDraftUseCase
 from application.use_cases.set_connection_secret import SetConnectionSecretUseCase
 from application.use_cases.set_events_token import SetEventsTokenUseCase
 from application.use_cases.set_notification_target import SetNotificationTargetUseCase
-from application.use_cases.submit_external_event import SubmitExternalEventUseCase
+from application.use_cases.submit_external_event import ExternalEventOutcome, SubmitExternalEventUseCase
 from application.use_cases.submit_mini_app_result import SubmitMiniAppResultUseCase
 from domain.bot.value_objects import Platform
 from domain.errors import (
@@ -64,6 +65,7 @@ from presentation.schemas.admin import (
     FlowDraftResponse,
     MiniAppAuthRequest,
     MiniAppAuthResponse,
+    MiniAppResultAck,
     MiniAppResultRequest,
     PublishResponse,
     SaveFlowRequest,
@@ -75,6 +77,10 @@ from presentation.schemas.admin import (
 )
 
 admin = APIRouter()
+
+# Контракт ответа POST /events (ADR-0019): судьба карточки у вызывающего.
+_DELIVERY_SETTLED = frozenset({ExternalEventOutcome.DELIVERED, ExternalEventOutcome.DUPLICATE})  # 200
+_RETRIABLE_OUTCOMES = frozenset({ExternalEventOutcome.IN_FLIGHT, ExternalEventOutcome.BOT_NOT_PUBLISHED})
 
 
 @admin.post(
@@ -217,19 +223,29 @@ async def attach_mini_app(
     return BotResponse.from_domain(bot)
 
 
-@admin.post("/bots/{bot_id}/miniapp/result", summary="Результат mini app -> сценарий (mini_app_result)")
+@admin.post(
+    "/bots/{bot_id}/miniapp/result",
+    summary="Результат mini app -> сценарий (mini_app_result)",
+    responses={409: {"model": MiniAppResultAck, "description": "Сценарий результат не исполнил (BR-012)"}},
+)
 async def submit_mini_app_result(
     bot_id: str,
     request: MiniAppResultRequest,
     use_case: Annotated[SubmitMiniAppResultUseCase, Depends(get_submit_mini_app_result_uc)],
-) -> dict[str, bool]:
+    response: Response,
+) -> MiniAppResultAck:
+    """409, а не `ok: true`, когда бот на паузе или триггера ``mini_app_result`` нет:
+    иначе mini app показывает пользователю «готово», а сценарий не сдвинулся (BR-012).
+    """
     try:
-        await use_case.execute(bot_id, request.init_data, request.result)
+        outcome = await use_case.execute(bot_id, request.init_data, request.result)
     except BotNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except MiniAppAuthError as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
-    return {"ok": True}
+    if outcome is not UpdateOutcome.EXECUTED:
+        response.status_code = status.HTTP_409_CONFLICT
+    return MiniAppResultAck(ok=outcome is UpdateOutcome.EXECUTED, outcome=outcome)
 
 
 @admin.put(
@@ -268,15 +284,17 @@ async def set_events_token(
 @admin.post(
     "/bots/{bot_id}/events",
     summary="Внешнее событие → сценарий (триггер external_event, BR-010)",
+    responses={409: {"model": EventAck, "description": "Событие не исполнено (ADR-0019): см. outcome/retriable"}},
 )
 async def submit_external_event(
     bot_id: str,
     request: SubmitEventRequest,
     use_case: Annotated[SubmitExternalEventUseCase, Depends(get_submit_external_event_uc)],
+    response: Response,
     x_events_token: Annotated[str, Header(alias="X-Events-Token")] = "",
 ) -> EventAck:
     try:
-        delivered = await use_case.execute(
+        outcome = await use_case.execute(
             bot_id,
             provided_token=x_events_token,
             event=request.event,
@@ -299,7 +317,15 @@ async def submit_external_event(
         # чинится только действием человека. Порядок except значим: все
         # перечисленные выше ошибки — наследники ApplicationError.
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
-    return EventAck(delivered=delivered)
+    # 200 — только доставка и дубль уже исполненного; всё остальное 409, иначе
+    # вызывающий пометит недоставленную карточку доставленной (ADR-0019).
+    if outcome not in _DELIVERY_SETTLED:
+        response.status_code = status.HTTP_409_CONFLICT
+    return EventAck(
+        delivered=outcome is ExternalEventOutcome.DELIVERED,
+        outcome=outcome,
+        retriable=outcome in _RETRIABLE_OUTCOMES,
+    )
 
 
 @admin.put(

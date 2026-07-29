@@ -187,6 +187,9 @@ def create_app() -> FastAPI:
             targets=notification_targets,
             idempotency=idempotency,
             process_update=process_update,
+            # Продление аренды ключа заметно чаще её срока — иначе ключ истечёт
+            # под живым исполнением (ADR-0019, ops/configuration.md).
+            lease_heartbeat_seconds=settings.events_inflight_ttl / 3,
         ),
         get_submit_mini_app_result_uc: lambda: SubmitMiniAppResultUseCase(
             bots=bots,

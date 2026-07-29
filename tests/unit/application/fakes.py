@@ -15,6 +15,7 @@ from application.ports.bot_platform import (
 )
 from application.ports.flow_repository import FlowDraft
 from application.ports.http_client import HttpResponse
+from application.ports.idempotency import Reservation
 from domain.bot.entities import Bot
 from domain.bot.value_objects import Platform
 from domain.capabilities import CapabilityMatrix
@@ -199,19 +200,37 @@ class StubPlatform:
 
 
 class StubIdempotency:
-    """In-memory реализация IdempotencyPort."""
+    """In-memory реализация IdempotencyPort: ключ живёт «в работе» или «выполнен»."""
 
     def __init__(self) -> None:
-        self.seen: set[str] = set()
+        self.state: dict[str, Reservation] = {}
+        self.touched: list[str] = []
+
+    @property
+    def seen(self) -> set[str]:
+        return set(self.state)
 
     async def first_time(self, key: str) -> bool:
-        if key in self.seen:
+        if key in self.state:
             return False
-        self.seen.add(key)
+        self.state[key] = Reservation.DONE
         return True
 
+    async def reserve(self, key: str) -> Reservation:
+        current = self.state.get(key)
+        if current is not None:
+            return current
+        self.state[key] = Reservation.IN_FLIGHT
+        return Reservation.ACQUIRED
+
+    async def touch(self, key: str) -> None:
+        self.touched.append(key)
+
+    async def confirm(self, key: str) -> None:
+        self.state[key] = Reservation.DONE
+
     async def forget(self, key: str) -> None:
-        self.seen.discard(key)
+        self.state.pop(key, None)
 
 
 class StubPlatformFactory:

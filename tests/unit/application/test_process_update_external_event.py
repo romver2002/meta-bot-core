@@ -6,7 +6,7 @@ import dataclasses
 
 import pytest
 
-from application.use_cases.process_update import ProcessUpdateUseCase
+from application.use_cases.process_update import ProcessUpdateUseCase, UpdateOutcome
 from domain.bot.value_objects import BotStatus, Platform
 from domain.events import IncomingEvent
 from domain.flow.entities import Button, Flow, Node, Trigger
@@ -95,8 +95,9 @@ def _event(name: str, variables: dict[str, str] | None = None) -> IncomingEvent:
 async def test_named_trigger_renders_payload_variables() -> None:
     use_case, port, _ = await _engine(_flow({"event": "order_status_changed"}))
 
-    await use_case.execute(_event("order_status_changed", {"title": "Бот с CRM", "budget": "50 000 ₽"}))
+    outcome = await use_case.execute(_event("order_status_changed", {"title": "Бот с CRM", "budget": "50 000 ₽"}))
 
+    assert outcome is UpdateOutcome.EXECUTED
     assert [c.text for c in port.sent] == ["Бот с CRM · 50 000 ₽"]
     assert port.sent[0].external_chat_id == CHAT
 
@@ -104,8 +105,9 @@ async def test_named_trigger_renders_payload_variables() -> None:
 async def test_mismatched_event_name_is_ignored_and_session_untouched() -> None:
     use_case, port, sessions = await _engine(_flow({"event": "order_status_changed"}))
 
-    await use_case.execute(_event("other_event", {"title": "мимо"}))
+    outcome = await use_case.execute(_event("other_event", {"title": "мимо"}))
 
+    assert outcome is UpdateOutcome.NO_TRIGGER_MATCHED  # исход виден вызывающему (ADR-0019)
     assert port.sent == []
     assert sessions.storage == {}  # несматченное событие не создаёт сессию и не пишет переменные
 

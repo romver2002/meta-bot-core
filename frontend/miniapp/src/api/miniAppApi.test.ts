@@ -42,6 +42,17 @@ describe('MiniAppApi', () => {
     })
   })
 
+  it('does not report success when the flow refused the result', async () => {
+    const fetchMock = vi.fn<FetchLike>(async () => jsonResponse({ ok: false, outcome: 'bot_not_published' }, 409))
+    const api = new MiniAppApi('', fetchMock)
+
+    const error = await api
+      .submitResult(BOT_ID, INIT_DATA, { action: 'confirmed' })
+      .catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(MiniAppApiError)
+    expect((error as MiniAppApiError).status).toBe(409)
+  })
+
   it('does not expose backend details or init data in errors', async () => {
     const fetchMock = vi.fn<FetchLike>(async () => jsonResponse({ detail: INIT_DATA }, 401))
     const api = new MiniAppApi('', fetchMock)

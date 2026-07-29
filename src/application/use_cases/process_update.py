@@ -12,6 +12,10 @@ webhook-роуте), находит бота и его опубликованн�
    продолжаем сценарий; иначе — matching mini_app_result-триггеров;
 4. иначе — матчинг входных триггеров; нераспознанное событие игнорируется.
 
+``execute`` возвращает ``UpdateOutcome``: вызывающий обязан отличать «сценарий
+исполнил событие» от «молча проигнорировал» — вебхуку это безразлично, а
+внешнему потребителю (ADR-0019) без этого нечего ответить.
+
 Поддерживаемые блоки v1: send_message, show_buttons, ask, condition, save,
 open_mini_app, http_request, notify. Остальные типы отклоняются при публикации
 CapabilityMatrix адаптеров (BR-006); здесь — защита в глубину.
@@ -21,6 +25,7 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import enum
 import logging
 import re
 import unicodedata
@@ -57,6 +62,15 @@ logger = logging.getLogger("app.engine")
 
 _Send = Callable[[str, tuple[Button, ...]], Awaitable[None]]
 _SendTo = Callable[[str, str], Awaitable[None]]  # (external_chat_id, text) — блок notify
+
+
+class UpdateOutcome(enum.StrEnum):
+    """Что движок сделал с обновлением — исход виден вызывающему, а не только логам."""
+
+    EXECUTED = "executed"  # событие распознано, цепочка исполнена
+    BOT_NOT_PUBLISHED = "bot_not_published"  # пауза/черновик: сценарий не исполнялся
+    NO_TRIGGER_MATCHED = "no_trigger_matched"  # ни один триггер/кнопка не подошли
+    FOREIGN_PLATFORM = "foreign_platform"  # update чужой платформы — защита вебхука
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -144,12 +158,13 @@ class ProcessUpdateUseCase:
         self._secrets = secrets
         self._notifications = notifications
 
-    async def execute(self, event: IncomingEvent) -> None:
+    async def execute(self, event: IncomingEvent) -> UpdateOutcome:
         bot = await self._bots.get(event.bot_id)
         if bot is None:
             raise BotNotFoundError(f"Бот {event.bot_id!r} не найден")
         if event.platform is not bot.platform:
-            return  # защита от чужого вебхука (нельзя даже подтверждать чужим адаптером)
+            # защита от чужого вебхука (нельзя даже подтверждать чужим адаптером)
+            return UpdateOutcome.FOREIGN_PLATFORM
 
         platform = self._platform_factory.for_platform(bot.platform)
         token = await self._token_vault.retrieve(bot.token.vault_ref)
@@ -164,7 +179,8 @@ class ProcessUpdateUseCase:
                 logger.warning("Подтверждение нажатия не принято платформой", extra={"bot_id": bot.id})
 
         if bot.status is not BotStatus.PUBLISHED or bot.published_flow_version_id is None:
-            return  # пауза/черновик: бот не отвечает (нажатие уже подтверждено выше)
+            # пауза/черновик: бот не отвечает (нажатие уже подтверждено выше)
+            return UpdateOutcome.BOT_NOT_PUBLISHED
 
         version = await self._flows.get_version(bot.published_flow_version_id)
         if version is None:
@@ -232,7 +248,8 @@ class ProcessUpdateUseCase:
 
         route = self._route(flow, session, event)
         if route is None:
-            return  # нераспознанное событие — сценарий не трогаем
+            # нераспознанное событие — сценарий не трогаем
+            return UpdateOutcome.NO_TRIGGER_MATCHED
 
         if event.event_type is TriggerType.EXTERNAL_EVENT and event.variables:
             # Payload внешнего события → переменные сессии ДО цепочки (ADR-0017):
@@ -247,6 +264,7 @@ class ProcessUpdateUseCase:
             # триггер начнёт новую сессию на актуальной версии (ADR-0008).
             session.complete()
         await self._sessions.save(session)
+        return UpdateOutcome.EXECUTED
 
     # ── маршрутизация события ────────────────────────────────────────────────
 

@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     session_retention_days: int = 30
     session_purge_interval: int = 3600
     webhook_idempotency_ttl: int = 86400
+    # Короткий TTL ключа «событие в работе» (ADR-0019): после падения процесса
+    # ключ истекает сам и ретрай вызывающего проходит, а не ложится в «дубли».
+    # Длину цепочки он ограничивать не обязан — пока исполнение живо, аренда
+    # продлевается heartbeat'ом (SubmitExternalEventUseCase).
+    events_inflight_ttl: int = 120
     webhook_secret: str | None = None  # сверяется с X-*-Secret заголовком платформы
     # Публичный HTTPS-адрес приёма вебхуков (ADR-0014): при заданном значении
     # publish сам регистрирует /webhooks/{platform}/{bot_id} у платформы;

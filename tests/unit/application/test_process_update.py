@@ -9,7 +9,7 @@ import pytest
 from application.errors import ApplicationError, FlowExecutionError
 from application.ports.bot_platform import AnswerCallbackCommand, SendMessageCommand
 from application.ports.http_client import HttpResponse
-from application.use_cases.process_update import ProcessUpdateUseCase
+from application.use_cases.process_update import ProcessUpdateUseCase, UpdateOutcome
 from domain.bot.entities import MiniApp
 from domain.bot.value_objects import BotStatus, Platform
 from domain.events import IncomingEvent
@@ -192,10 +192,12 @@ async def test_show_buttons_waits_then_next_button_continues() -> None:
 
 
 async def test_paused_bot_ignores_events() -> None:
+    """Молчание бота — это исход, а не None: вызывающий обязан его различать (ADR-0019)."""
     use_case, port, sessions = await _engine(_flow(), bot_status=BotStatus.PAUSED)
 
-    await use_case.execute(_event(TriggerType.START))
+    outcome = await use_case.execute(_event(TriggerType.START))
 
+    assert outcome is UpdateOutcome.BOT_NOT_PUBLISHED
     assert port.sent == []
     assert await sessions.get_active(BOT_ID, USER) is None
 
@@ -203,8 +205,9 @@ async def test_paused_bot_ignores_events() -> None:
 async def test_unmatched_event_is_ignored() -> None:
     use_case, port, sessions = await _engine(_flow())
 
-    await use_case.execute(_event(TriggerType.TEXT, text="что-то левое"))
+    outcome = await use_case.execute(_event(TriggerType.TEXT, text="что-то левое"))
 
+    assert outcome is UpdateOutcome.NO_TRIGGER_MATCHED
     assert port.sent == []
     assert await sessions.get_active(BOT_ID, USER) is None
 
@@ -219,8 +222,9 @@ async def test_foreign_platform_event_is_ignored() -> None:
         event_type=TriggerType.START,
     )
 
-    await use_case.execute(event)
+    outcome = await use_case.execute(event)
 
+    assert outcome is UpdateOutcome.FOREIGN_PLATFORM
     assert port.sent == []
 
 

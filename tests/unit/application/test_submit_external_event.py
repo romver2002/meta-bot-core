@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 from application.errors import (
@@ -9,7 +11,12 @@ from application.errors import (
     ExternalEventAuthError,
     ExternalEventValidationError,
 )
-from application.use_cases.submit_external_event import SubmitExternalEventUseCase
+from application.ports.idempotency import Reservation
+from application.use_cases.process_update import UpdateOutcome
+from application.use_cases.submit_external_event import (
+    ExternalEventOutcome,
+    SubmitExternalEventUseCase,
+)
 from domain.events import IncomingEvent
 from domain.flow.value_objects import TriggerType
 from tests.unit.application.fakes import (
@@ -36,11 +43,13 @@ class StubEventsTokens:
 class SpyEngine:
     """Стоит на месте ProcessUpdateUseCase: записывает поданные события."""
 
-    def __init__(self) -> None:
+    def __init__(self, outcome: UpdateOutcome = UpdateOutcome.EXECUTED) -> None:
         self.events: list[IncomingEvent] = []
+        self.outcome = outcome
 
-    async def execute(self, event: IncomingEvent) -> None:
+    async def execute(self, event: IncomingEvent) -> UpdateOutcome:
         self.events.append(event)
+        return self.outcome
 
 
 def _use_case(
@@ -48,22 +57,26 @@ def _use_case(
     with_bot: bool = True,
     tokens: dict[str, str] | None = None,
     targets: dict[str, str] | None = None,
+    outcome: UpdateOutcome = UpdateOutcome.EXECUTED,
+    idempotency: StubIdempotency | None = None,
+    lease_heartbeat_seconds: float = 3600.0,
 ) -> tuple[SubmitExternalEventUseCase, SpyEngine]:
     bots = InMemoryBotRepository()
     if with_bot:
         bots.storage[BOT_ID] = make_bot(BOT_ID, flow_id="flow-1")
-    engine = SpyEngine()
+    engine = SpyEngine(outcome)
     use_case = SubmitExternalEventUseCase(
         bots=bots,
         events_tokens=StubEventsTokens(tokens if tokens is not None else {BOT_ID: TOKEN}),
         targets=StubNotificationTargets(targets if targets is not None else {"owner": "chat-owner"}),
-        idempotency=StubIdempotency(),
+        idempotency=idempotency or StubIdempotency(),
         process_update=engine,  # type: ignore[arg-type] — SpyEngine дублирует контракт execute
+        lease_heartbeat_seconds=lease_heartbeat_seconds,
     )
     return use_case, engine
 
 
-async def _submit(use_case: SubmitExternalEventUseCase, **overrides: object) -> bool:
+async def _submit(use_case: SubmitExternalEventUseCase, **overrides: object) -> ExternalEventOutcome:
     params: dict[str, object] = {
         "provided_token": TOKEN,
         "event": "order_status_changed",
@@ -79,7 +92,7 @@ async def _submit(use_case: SubmitExternalEventUseCase, **overrides: object) -> 
 async def test_happy_path_role_resolves_to_private_chat() -> None:
     use_case, engine = _use_case()
 
-    assert await _submit(use_case) is True
+    assert await _submit(use_case) is ExternalEventOutcome.DELIVERED
 
     (event,) = engine.events
     assert event.event_type is TriggerType.EXTERNAL_EVENT
@@ -99,7 +112,7 @@ async def test_user_address_delivers_prefixed_but_identifies_bare() -> None:
     """
     use_case, engine = _use_case(targets={"owner": "user:100000001"})
 
-    assert await _submit(use_case) is True
+    assert await _submit(use_case) is ExternalEventOutcome.DELIVERED
 
     (event,) = engine.events
     assert event.external_chat_id == "user:100000001"  # доставка — по конвенции
@@ -176,8 +189,8 @@ async def test_payload_keys_must_be_valid_variable_names() -> None:
 async def test_event_id_deduplicates_retries() -> None:
     use_case, engine = _use_case()
 
-    assert await _submit(use_case, event_id="e-1") is True
-    assert await _submit(use_case, event_id="e-1") is False  # ретрай вызывающего
+    assert await _submit(use_case, event_id="e-1") is ExternalEventOutcome.DELIVERED
+    assert await _submit(use_case, event_id="e-1") is ExternalEventOutcome.DUPLICATE  # ретрай вызывающего
 
     assert len(engine.events) == 1
 
@@ -191,17 +204,181 @@ async def test_failed_delivery_frees_event_id_for_retry() -> None:
 
     original = engine.execute
 
-    async def flaky(event: IncomingEvent) -> None:
+    async def flaky(event: IncomingEvent) -> UpdateOutcome:
         nonlocal boom
         if boom:
             boom = False
             raise RuntimeError("платформа упала")
-        await original(event)
+        return await original(event)
 
     engine.execute = flaky  # type: ignore[method-assign]
 
     with pytest.raises(RuntimeError):
         await _submit(use_case, event_id="e-retry")
-    assert await _submit(use_case, event_id="e-retry") is True  # ключ освобождён
+    assert await _submit(use_case, event_id="e-retry") is ExternalEventOutcome.DELIVERED  # ключ освобождён
 
+    assert len(engine.events) == 1
+
+
+async def test_paused_bot_is_not_reported_as_delivered() -> None:
+    """Бот на паузе: событие не исполнено — вызывающему нельзя отвечать «доставлено».
+
+    До ADR-0019 ядро отвечало delivered=true, отправитель помечал карточку
+    доставленной, и после снятия паузы она не уходила уже никогда.
+    """
+    use_case, _ = _use_case(outcome=UpdateOutcome.BOT_NOT_PUBLISHED)
+
+    assert await _submit(use_case, event_id="e-paused") is ExternalEventOutcome.BOT_NOT_PUBLISHED
+
+
+async def test_unmatched_event_is_not_reported_as_delivered() -> None:
+    """В опубликованном сценарии нет триггера под это имя события."""
+    use_case, _ = _use_case(outcome=UpdateOutcome.NO_TRIGGER_MATCHED)
+
+    assert await _submit(use_case, event_id="e-nomatch") is ExternalEventOutcome.NO_TRIGGER_MATCHED
+
+
+@pytest.mark.parametrize("outcome", [UpdateOutcome.BOT_NOT_PUBLISHED, UpdateOutcome.NO_TRIGGER_MATCHED])
+async def test_not_executed_event_keeps_event_id_free(outcome: UpdateOutcome) -> None:
+    """Не исполнено — ключ свободен: повтор после снятия паузы/починки сценария пройдёт."""
+    idempotency = StubIdempotency()
+    use_case, _ = _use_case(outcome=outcome, idempotency=idempotency)
+
+    await _submit(use_case, event_id="e-later")
+    assert idempotency.state == {}
+
+    healthy, engine = _use_case(idempotency=idempotency)
+    assert await _submit(healthy, event_id="e-later") is ExternalEventOutcome.DELIVERED
+    assert len(engine.events) == 1
+
+
+async def test_key_is_only_in_flight_until_delivery_confirms_it() -> None:
+    """Ключ продлевается ТОЛЬКО фактическим исполнением (ADR-0019).
+
+    Пока событие в работе, ключ короткоживущий: убьют контейнер — он истечёт
+    сам и ретрай пройдёт. После исполнения ключ становится «выполнено» и
+    отсекает настоящий дубль.
+    """
+    idempotency = StubIdempotency()
+    use_case, _ = _use_case(idempotency=idempotency)
+    seen: list[Reservation] = []
+
+    original = idempotency.confirm
+
+    async def spy_confirm(key: str) -> None:
+        seen.append(idempotency.state[key])  # состояние ДО подтверждения
+        await original(key)
+
+    idempotency.confirm = spy_confirm  # type: ignore[method-assign]
+
+    await _submit(use_case, event_id="e-confirm")
+
+    assert seen == [Reservation.IN_FLIGHT]
+    assert idempotency.state == {f"events:{BOT_ID}:e-confirm": Reservation.DONE}
+
+
+async def test_parallel_retry_of_in_flight_event_is_not_a_duplicate() -> None:
+    """Ретрай, пока первая попытка ещё не завершилась, — «в работе», а не «дубль».
+
+    Отличие принципиальное: «дубль» отправитель считает доставкой, «в работе» —
+    поводом повторить позже.
+    """
+    idempotency = StubIdempotency()
+    use_case, _ = _use_case(idempotency=idempotency)
+    idempotency.state[f"events:{BOT_ID}:e-busy"] = Reservation.IN_FLIGHT
+
+    assert await _submit(use_case, event_id="e-busy") is ExternalEventOutcome.IN_FLIGHT
+
+
+async def test_cancelled_delivery_frees_event_id() -> None:
+    """Отмена задачи (разрыв соединения, shutdown) — не Exception: ключ всё равно
+    освобождается, иначе карточка исчезает навсегда при graceful shutdown.
+    """
+    idempotency = StubIdempotency()
+    use_case, engine = _use_case(idempotency=idempotency)
+
+    async def cancelled(event: IncomingEvent) -> UpdateOutcome:
+        raise asyncio.CancelledError
+
+    engine.execute = cancelled  # type: ignore[method-assign]
+
+    with pytest.raises(asyncio.CancelledError):
+        await _submit(use_case, event_id="e-cancel")
+    assert idempotency.state == {}
+
+
+async def test_release_survives_cancellation_mid_forget() -> None:
+    """Отмена приходит, пока forget уже стартовал: shield доводит удаление до конца.
+
+    Без shield ключ остался бы «в работе» до истечения TTL, и ретрай вызывающего
+    вернул бы in_flight вместо доставки.
+    """
+    idempotency = StubIdempotency()
+    use_case, engine = _use_case(idempotency=idempotency)
+    forget_started, allow_forget = asyncio.Event(), asyncio.Event()
+    original_forget = idempotency.forget
+
+    async def slow_forget(key: str) -> None:
+        forget_started.set()
+        await allow_forget.wait()
+        await original_forget(key)
+
+    async def failing(event: IncomingEvent) -> UpdateOutcome:
+        raise RuntimeError("платформа упала")
+
+    idempotency.forget = slow_forget  # type: ignore[method-assign]
+    engine.execute = failing  # type: ignore[method-assign]
+
+    task = asyncio.create_task(_submit(use_case, event_id="e-shield"))
+    await forget_started.wait()
+    task.cancel()
+    allow_forget.set()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert idempotency.state == {}
+
+
+async def test_lease_is_renewed_while_execution_is_running() -> None:
+    """Долгое исполнение продлевает аренду ключа, а не даёт ей истечь под собой."""
+    idempotency = StubIdempotency()
+    use_case, engine = _use_case(idempotency=idempotency, lease_heartbeat_seconds=0.01)
+    renewed, release = asyncio.Event(), asyncio.Event()
+    original_touch, original_execute = idempotency.touch, engine.execute
+
+    async def spy_touch(key: str) -> None:
+        await original_touch(key)
+        renewed.set()
+
+    async def slow(event: IncomingEvent) -> UpdateOutcome:
+        await release.wait()
+        return await original_execute(event)
+
+    idempotency.touch = spy_touch  # type: ignore[method-assign]
+    engine.execute = slow  # type: ignore[method-assign]
+
+    task = asyncio.create_task(_submit(use_case, event_id="e-slow"))
+    await renewed.wait()
+    release.set()
+
+    assert await task is ExternalEventOutcome.DELIVERED
+    touched_during_run = len(idempotency.touched)
+    await asyncio.sleep(0.05)  # heartbeat остановлен вместе с исполнением
+    assert len(idempotency.touched) == touched_during_run
+    assert idempotency.state == {f"events:{BOT_ID}:e-slow": Reservation.DONE}
+
+
+async def test_broken_dedup_store_does_not_cancel_a_real_delivery() -> None:
+    """Карточка уже ушла: сбой confirm нельзя превращать в ошибку вызывающему —
+    он повторит событие, и получатель увидит её дважды.
+    """
+    idempotency = StubIdempotency()
+    use_case, engine = _use_case(idempotency=idempotency)
+
+    async def broken_confirm(key: str) -> None:
+        raise RuntimeError("redis недоступен")
+
+    idempotency.confirm = broken_confirm  # type: ignore[method-assign]
+
+    assert await _submit(use_case, event_id="e-broken") is ExternalEventOutcome.DELIVERED
     assert len(engine.events) == 1

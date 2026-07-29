@@ -9,7 +9,7 @@ from application.errors import BotNotFoundError, MiniAppAuthError
 from application.ports.bot_platform import PlatformFactory
 from application.ports.bot_repository import BotRepository
 from application.ports.token_vault import TokenVaultPort
-from application.use_cases.process_update import ProcessUpdateUseCase
+from application.use_cases.process_update import ProcessUpdateUseCase, UpdateOutcome
 from domain.events import IncomingEvent
 from domain.flow.value_objects import TriggerType
 
@@ -37,7 +37,8 @@ class SubmitMiniAppResultUseCase:
         self._platform_factory = platform_factory
         self._process_update = process_update
 
-    async def execute(self, bot_id: str, init_data: str, result: dict[str, Any]) -> None:
+    async def execute(self, bot_id: str, init_data: str, result: dict[str, Any]) -> UpdateOutcome:
+        """Возвращает исход движка: «не исполнено» нельзя выдавать за «готово» (BR-012)."""
         bot = await self._bots.get(bot_id)
         if bot is None:
             raise BotNotFoundError(f"Бот {bot_id!r} не найден")
@@ -56,4 +57,4 @@ class SubmitMiniAppResultUseCase:
             event_type=TriggerType.MINI_APP_RESULT,
             payload=json.dumps(result, ensure_ascii=False),
         )
-        await self._process_update.execute(event)
+        return await self._process_update.execute(event)

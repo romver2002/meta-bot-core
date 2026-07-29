@@ -4,7 +4,7 @@ import pytest
 
 from application.errors import MiniAppAuthError
 from application.ports.bot_platform import MiniAppIdentity
-from application.use_cases.process_update import ProcessUpdateUseCase
+from application.use_cases.process_update import ProcessUpdateUseCase, UpdateOutcome
 from application.use_cases.submit_mini_app_result import SubmitMiniAppResultUseCase
 from domain.bot.value_objects import BotStatus
 from domain.flow.entities import Flow, Node, Trigger
@@ -35,7 +35,7 @@ def _flow() -> Flow:
     )
 
 
-async def _use_case(validator) -> tuple[SubmitMiniAppResultUseCase, StubPlatform]:
+async def _use_case(validator, *, published: bool = True) -> tuple[SubmitMiniAppResultUseCase, StubPlatform]:
     bots, flows = InMemoryBotRepository(), InMemoryFlowRepository()
     sessions, vault = InMemorySessionRepository(), InMemoryTokenVault()
     platform = StubPlatform(full_capabilities(), init_data_validator=validator)
@@ -43,7 +43,7 @@ async def _use_case(validator) -> tuple[SubmitMiniAppResultUseCase, StubPlatform
 
     bot = make_bot("bot-1", flow_id="f")
     bot.token = type(bot.token)(vault_ref=await vault.store("bot-1", "fake-token"))
-    bot.status = BotStatus.PUBLISHED
+    bot.status = BotStatus.PUBLISHED if published else BotStatus.PAUSED
     bot.published_flow_version_id = "v1"
     await bots.save(bot)
     flows.versions["v1"] = FlowVersion(
@@ -66,8 +66,19 @@ async def _use_case(validator) -> tuple[SubmitMiniAppResultUseCase, StubPlatform
 
 async def test_valid_result_fires_trigger_and_replies() -> None:
     use_case, platform = await _use_case(lambda _t, _d: MiniAppIdentity(external_user_id="9", params={}))
-    await use_case.execute("bot-1", "signed-init-data", {"item": "Latte"})
+    outcome = await use_case.execute("bot-1", "signed-init-data", {"item": "Latte"})
     assert [c.text for c in platform.sent] == ["Готово"]
+    assert outcome is UpdateOutcome.EXECUTED
+
+
+async def test_paused_bot_returns_not_executed_outcome() -> None:
+    """Сценарий результат не принял — use case обязан это вернуть, а не смолчать (BR-012)."""
+    use_case, platform = await _use_case(
+        lambda _t, _d: MiniAppIdentity(external_user_id="9", params={}), published=False
+    )
+    outcome = await use_case.execute("bot-1", "signed-init-data", {"item": "Latte"})
+    assert outcome is UpdateOutcome.BOT_NOT_PUBLISHED
+    assert platform.sent == []
 
 
 async def test_invalid_init_data_raises_and_engine_untouched() -> None:
